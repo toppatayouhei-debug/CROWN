@@ -50,46 +50,40 @@ st.components.v1.html(f"""
         let index = 0;
         let isAuto = false;
         let autoTimer = null;
+        let bestVoice = null;
         const synth = window.speechSynthesis;
 
-        // --- 声の選別ロジック（強化版） ---
-        function getBestVoice() {{
+        // --- 声の選別（iPad専用・再試行ロジック付） ---
+        function findBestVoice() {{
             const voices = synth.getVoices();
-            
-            // 英語(en)の声だけを対象にする
+            if (voices.length === 0) return null;
+
             const enVoices = voices.filter(v => v.lang.includes('en'));
-
-            // 優先順位1: 拡張、プレミアム、Enhanced、Premiumが含まれるもの
-            let premium = enVoices.find(v => 
-                v.name.includes('拡張') || 
-                v.name.includes('プレミアム') || 
-                v.name.includes('Enhanced') || 
-                v.name.includes('Premium')
+            
+            // iPadの「プレミアム」「拡張」「Enhanced」「Premium」を探す
+            let topTier = enVoices.find(v => 
+                v.name.includes('拡張') || v.name.includes('プレミアム') || 
+                v.name.includes('Enhanced') || v.name.includes('Premium') ||
+                v.name.includes('Siri')
             );
-            if (premium) return premium;
 
-            // 優先順位2: Siri, Samantha, Daniel などの主要な名前
-            let siri = enVoices.find(v => 
-                v.name.includes('Siri') || 
-                v.name.includes('Samantha') || 
-                v.name.includes('Daniel')
-            );
-            if (siri) return siri;
-
-            // 優先順位3: 何でもいいから英語
-            return enVoices[0];
+            if (topTier) {{
+                console.log("iPad Premium Voice Found:", topTier.name);
+                return topTier;
+            }}
+            return enVoices.find(v => v.name.includes('Samantha')) || enVoices[0];
         }}
 
+        // iPadのために「使う直前」に声を確定させる
         function speak(text) {{
             synth.cancel();
             if (autoTimer) clearTimeout(autoTimer);
 
+            // ここがポイント：再生の瞬間に声を再検索する
+            bestVoice = findBestVoice();
+
             const uttr = new SpeechSynthesisUtterance(text);
-            const voice = getBestVoice();
-            if (voice) {{
-                uttr.voice = voice;
-                console.log("Selected voice:", voice.name); // どの声が選ばれたかログに出す
-            }}
+            if (bestVoice) uttr.voice = bestVoice;
             
             uttr.lang = 'en-US';
             uttr.rate = 0.9;
@@ -113,11 +107,10 @@ st.components.v1.html(f"""
             speak(data[index][0]);
         }}
 
-        // iPadでのボイスリスト読み込み完了を待つ
+        // iPad用：起動時とクリック時に声をロードする
+        window.onload = () => {{ synth.getVoices(); }};
         if (speechSynthesis.onvoiceschanged !== undefined) {{
-            speechSynthesis.onvoiceschanged = () => {{
-                console.log("Voices reloaded");
-            }};
+            speechSynthesis.onvoiceschanged = () => {{ bestVoice = findBestVoice(); }};
         }}
 
         document.getElementById('btn-next').onclick = () => {{
