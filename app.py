@@ -4,7 +4,6 @@ from gtts import gTTS
 import io
 import base64
 
-# ページの設定
 st.set_page_config(page_title="CROWN音読ツール", layout="centered")
 
 # --- データの読み込み ---
@@ -17,14 +16,23 @@ def load_data():
 
 df = load_data()
 
+# --- セッション状態の初期化 ---
 if 'index' not in st.session_state:
     st.session_state.index = 0
 if 'mode' not in st.session_state:
-    st.session_state.mode = "手動"
+    st.session_state.mode = "待機" # 最初は待機状態にする
 
 st.title("🔊 CROWN音読ツール")
 
-# --- 学習モード選択（大きく見やすく） ---
+# --- 1. 最初の起動画面 ---
+if st.session_state.mode == "待機":
+    st.info("下のボタンを押すと学習を開始します。")
+    if st.button("🚀 学習を開始する（音声を許可）", use_container_width=True, type="primary"):
+        st.session_state.mode = "手動" # 最初は手動からスタート
+        st.rerun()
+    st.stop() # ここで処理を止めてボタン押し待ちにする
+
+# --- 2. 学習画面（ここから下がメイン） ---
 col_m1, col_m2 = st.columns(2)
 with col_m1:
     if st.button("👆 手動モード", use_container_width=True, type="primary" if st.session_state.mode == "手動" else "secondary"):
@@ -50,7 +58,7 @@ st.markdown(f"""
     </div>
     """, unsafe_allow_html=True)
 
-# --- 音声生成 (Base64) ---
+# 音声生成
 tts = gTTS(text=eng, lang='en')
 fp = io.BytesIO()
 tts.write_to_fp(fp)
@@ -58,18 +66,8 @@ fp.seek(0)
 b64_audio = base64.b64encode(fp.read()).decode()
 
 # --- 実行ロジック ---
-
-# 共通：先頭に戻るボタン
-if st.button("⏮️ 先頭に戻る", use_container_width=True):
-    st.session_state.index = 0
-    st.rerun()
-
 if st.session_state.mode == "手動":
-    # 手動モードの音声とボタン
-    st.components.v1.html(f"""
-        <audio autoplay src="data:audio/mp3;base64,{b64_audio}"></audio>
-    """, height=0)
-    
+    st.components.v1.html(f"""<audio autoplay src="data:audio/mp3;base64,{b64_audio}"></audio>""", height=0)
     col1, col2 = st.columns(2)
     with col1:
         if st.button("⬅️ 前へ", use_container_width=True):
@@ -79,39 +77,34 @@ if st.session_state.mode == "手動":
         if st.button("次へ ➡️", use_container_width=True):
             st.session_state.index = (st.session_state.index + 1) % len(df)
             st.rerun()
-
 else:
     # オートモード
-    st.info("🤖 読み上げが終わると自動で次へ進みます...")
-    
-    # 停止ボタン
     if st.button("⏹️ オートを停止して手動に戻る", use_container_width=True, type="primary"):
         st.session_state.mode = "手動"
         st.rerun()
     
-    # オート用の「次へ」実行ボタン（これを見える状態で配置し、JSから叩く）
-    if st.button("（自動更新用）次へ進む", use_container_width=True):
+    # 隠しボタン
+    if st.button("NEXT_STEP", key="auto_next"):
         st.session_state.index = (st.session_state.index + 1) % len(df)
         st.rerun()
 
-    # 音声終了を検知して、上のボタンをクリックするJS
     st.components.v1.html(f"""
-        <audio id="tts-player" autoplay src="data:audio/mp3;base64,{b64_audio}"></audio>
+        <audio id="tts" autoplay src="data:audio/mp3;base64,{b64_audio}"></audio>
         <script>
-            var audio = document.getElementById('tts-player');
+            var audio = document.getElementById('tts');
             audio.onended = function() {{
                 setTimeout(function() {{
-                    // 「次へ進む」ボタンを探してクリック
-                    var buttons = window.parent.document.querySelectorAll('button');
-                    for (var i = 0; i < buttons.length; i++) {{
-                        if (buttons[i].innerText.includes('次へ進む')) {{
-                            buttons[i].click();
-                            break;
-                        }}
+                    var btns = window.parent.document.querySelectorAll('button');
+                    for (var i = 0; i < btns.length; i++) {{
+                        if (btns[i].innerText === 'NEXT_STEP') {{ btns[i].click(); break; }}
                     }}
                 }}, 1000);
             }};
         </script>
     """, height=0)
 
+st.markdown("""<style>div[data-testid="stButton"] button:has(div:contains("NEXT_STEP")) { display: none; }</style>""", unsafe_allow_html=True)
 st.divider()
+if st.button("⏮️ 先頭に戻る", use_container_width=True):
+    st.session_state.index = 0
+    st.rerun()
