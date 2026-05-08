@@ -2,23 +2,20 @@ import streamlit as st
 import pandas as pd
 from gtts import gTTS
 import io
-import time
+import base64
 
-# ページの設定
 st.set_page_config(page_title="CROWN音読ツール", layout="centered")
 
 # --- データの読み込み ---
 @st.cache_data
 def load_data():
     try:
-        # A2, B2から読み込み（1行目はヘッダー）
         return pd.read_csv("data.csv")
     except:
         return pd.DataFrame([["Error", "CSV読み込み失敗"]])
 
 df = load_data()
 
-# --- セッション状態の初期化 ---
 if 'index' not in st.session_state:
     st.session_state.index = 0
 if 'mode' not in st.session_state:
@@ -39,38 +36,39 @@ with col_m2:
 
 st.divider()
 
-# --- メイン表示エリア ---
-def display_card(idx):
-    eng = str(df.iloc[idx, 0])
-    jp = str(df.iloc[idx, 1])
-    
-    st.write(f"📍 {idx + 1} / {len(df)} 枚目")
-    st.markdown(f"""
-        <div style="background-color: #f0f2f6; padding: 30px; border-radius: 15px; border-left: 10px solid #005088; text-align: center; margin-bottom: 20px;">
-            <div style="font-size: 26px; font-weight: bold; color: #333;">{eng}</div>
-            <hr style="margin: 20px 0;">
-            <div style="font-size: 18px; color: #666;">{jp}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # 音声を生成して再生
-    tts = gTTS(text=eng, lang='en')
-    fp = io.BytesIO()
-    tts.write_to_fp(fp)
-    fp.seek(0)
-    st.audio(fp, format='audio/mp3', autoplay=True)
+# --- カード表示 ---
+eng = str(df.iloc[st.session_state.index, 0])
+jp = str(df.iloc[st.session_state.index, 1])
 
-# --- モード別実行ロジック ---
+st.write(f"📍 {st.session_state.index + 1} / {len(df)} 枚目")
+st.markdown(f"""
+    <div style="background-color: #f0f2f6; padding: 30px; border-radius: 15px; border-left: 10px solid #005088; text-align: center; margin-bottom: 10px;">
+        <div style="font-size: 26px; font-weight: bold; color: #333;">{eng}</div>
+        <hr>
+        <div style="font-size: 18px; color: #666;">{jp}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
+# --- 音声生成 (Base64) ---
+tts = gTTS(text=eng, lang='en')
+fp = io.BytesIO()
+tts.write_to_fp(fp)
+fp.seek(0)
+b64_audio = base64.b64encode(fp.read()).decode()
+
+# --- 制御ロジック ---
 if st.session_state.mode == "手動":
-    display_card(st.session_state.index)
+    # 手動用：表示時に鳴らし、次は自分で押す
+    st.components.v1.html(f"""
+        <audio autoplay src="data:audio/mp3;base64,{b64_audio}"></audio>
+    """, height=0)
     
-    col_nav1, col_nav2 = st.columns(2)
-    with col_nav1:
+    col1, col2 = st.columns(2)
+    with col1:
         if st.button("⬅️ 前へ", use_container_width=True):
             st.session_state.index = (st.session_state.index - 1) % len(df)
             st.rerun()
-    with col_nav2:
+    with col2:
         if st.button("次へ ➡️", use_container_width=True):
             st.session_state.index = (st.session_state.index + 1) % len(df)
             st.rerun()
@@ -80,22 +78,32 @@ if st.session_state.mode == "手動":
         st.rerun()
 
 else:
-    # --- オートモード ---
+    # オートモード用：【重要】再生終了後に次のボタンを自動クリック
+    st.info("🤖 読み上げ終了後に自動で次のカードへ進みます...")
+    
+    # 次のインデックスへ進むための不可視ボタン（JSからクリックする）
+    if st.button("INTERNAL_NEXT", key="hidden_next", help="hidden"):
+        st.session_state.index = (st.session_state.index + 1) % len(df)
+        st.rerun()
+    
+    # 停止ボタン
     if st.button("⏹️ オートを停止して手動に戻る", use_container_width=True, type="primary"):
         st.session_state.mode = "手動"
         st.rerun()
 
-    # 現在のカードを表示・再生
-    display_card(st.session_state.index)
-    
-    # 英文の長さに合わせて待機時間を調整（1秒間に3単語＋余裕2秒）
-    # 固定5秒だと長い文が途切れるため、文字数で計算します
-    eng_text = str(df.iloc[st.session_state.index, 0])
-    wait_seconds = max(5, len(eng_text.split()) / 2 + 3) 
-    
-    st.info(f"⏳ 次のカードまで約 {int(wait_seconds)} 秒待機します...")
-    
-    # 指定時間待機してからリロードして次へ
-    time.sleep(wait_seconds)
-    st.session_state.index = (st.session_state.index + 1) % len(df)
-    st.rerun()
+    # JavaScriptで音声の終了（ended）を検知してリロードさせる
+    st.components.v1.html(f"""
+        <audio id="player" autoplay src="data:audio/mp3;base64,{b64_audio}"></audio>
+        <script>
+            var audio = document.getElementById('player');
+            audio.onended = function() {{
+                // 音声終了後、1.5秒だけ余韻を置いてから次へ
+                setTimeout(function() {{
+                    window.parent.document.querySelector('button[kind="secondary"]').click();
+                }}, 1500);
+            }};
+        </script>
+    """, height=0)
+
+# 非表示ボタンのスタイル調整（見た目を消す）
+st.markdown("""<style>div[data-testid="stButton"] button:has(div:contains("INTERNAL_NEXT")) { display: none; }</style>""", unsafe_allow_html=True)
