@@ -7,7 +7,7 @@ import json
 
 st.set_page_config(page_title="CROWN Study Hub", layout="centered")
 
-# --- 1. データの読み込み（以前の構成を完全維持） ---
+# --- 1. データの読み込み ---
 @st.cache_data
 def load_all_data():
     try:
@@ -28,7 +28,7 @@ def load_all_data():
 
 text_raw, tango_raw = load_all_data()
 
-# --- 2. 音声パック（iPad安定版ロジックを完全継承） ---
+# --- 2. 音声パック ---
 @st.cache_data
 def prepare_assets(raw_data, is_tango=False):
     prepared = []
@@ -51,27 +51,28 @@ def prepare_assets(raw_data, is_tango=False):
         prepared.append(entry)
     return prepared
 
-with st.spinner("教材を読み込み中..."):
+with st.spinner("教材を準備中..."):
     text_json = json.dumps(prepare_assets(text_raw, False))
     tango_json = json.dumps(prepare_assets(tango_raw, True))
 
 st.title("🎓 CROWN Study Hub")
 
-# --- 3. 画面表示（本文音読の挙動を維持しつつ、テスト機能を追加） ---
+# --- 3. メインUI ---
 st.components.v1.html(f"""
     <div id="study-app" style="font-family: -apple-system, sans-serif; color: #333;">
         
-        <div style="display: flex; background: #eee; padding: 5px; border-radius: 12px; margin-bottom: 20px;">
+        <div style="display: flex; background: #eee; padding: 5px; border-radius: 12px; margin-bottom: 15px;">
             <button id="mode-text" style="flex: 1; padding: 12px; border-radius: 10px; border: none; background: #005088; color: white; font-weight: bold;">📖 本文音読</button>
             <button id="mode-tango" style="flex: 1; padding: 12px; border-radius: 10px; border: none; background: transparent; color: #333; font-weight: bold;">🗂️ 単語カード</button>
         </div>
 
-        <div style="display: flex; gap: 8px; margin-bottom: 20px;">
-            <button id="btn-manual" style="flex: 1; padding: 12px; border-radius: 10px; border: none; background: #333; color: white; font-weight: bold;">👆 手動</button>
-            <button id="btn-auto" style="flex: 1; padding: 12px; border-radius: 10px; border: none; background: #eee; color: #333; font-weight: bold;">🤖 オート</button>
+        <div style="display: flex; gap: 5px; margin-bottom: 15px;">
+            <button id="btn-manual" style="flex: 1.5; padding: 10px; border-radius: 10px; border: none; background: #333; color: white; font-size: 12px; font-weight: bold;">👆 手動</button>
+            <button id="btn-auto" style="flex: 1.5; padding: 10px; border-radius: 10px; border: none; background: #eee; color: #333; font-size: 12px; font-weight: bold;">🤖 オート</button>
+            <button id="btn-random" style="flex: 1; padding: 10px; border-radius: 10px; border: none; background: #eee; color: #333; font-size: 12px; font-weight: bold;">🔀 ランダム</button>
         </div>
 
-        <div id="card" style="background: #f8f9fa; padding: 35px 20px; border-radius: 25px; border-left: 12px solid #005088; text-align: center; min-height: 280px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 6px 15px rgba(0,0,0,0.1);">
+        <div id="card" style="background: #f8f9fa; padding: 35px 20px; border-radius: 25px; border-left: 12px solid #005088; text-align: center; min-height: 250px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 6px 15px rgba(0,0,0,0.1);">
             <div id="eng" style="font-size: 28px; font-weight: 800; margin-bottom: 10px;"></div>
             
             <div id="jp-container">
@@ -82,7 +83,7 @@ st.components.v1.html(f"""
                 </div>
             </div>
 
-            <button id="btn-show" style="display: none; margin: 20px auto 0; padding: 10px 20px; border-radius: 20px; border: 2px solid #005088; background: white; color: #005088; font-weight: bold; cursor: pointer;">👀 答えを見る</button>
+            <button id="btn-show" style="display: none; margin: 20px auto 0; padding: 12px 25px; border-radius: 20px; border: 2px solid #005088; background: white; color: #005088; font-weight: bold;">🔍 意味をチェック</button>
         </div>
 
         <div id="nav-controls" style="margin-top: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
@@ -105,10 +106,10 @@ st.components.v1.html(f"""
         let currentDataSet = textData;
         let index = 0;
         let isAuto = false;
-        let timer = null;
+        let isRandom = false;
         let currentAudio = new Audio();
+        let timer = null;
         let currentMode = 'text';
-        let isRevealed = false; // 答えが表示されているか
 
         function updateCard(shouldPlay = true) {{
             const item = currentDataSet[index];
@@ -124,7 +125,6 @@ st.components.v1.html(f"""
                 document.getElementById('ex').innerText = item.ex || "";
                 document.getElementById('ext').innerText = item.ext || "";
                 
-                // オートモードなら最初から表示、手動なら隠す
                 if (isAuto) {{
                     jpContainer.style.display = "block";
                     extra.style.display = "block";
@@ -133,10 +133,8 @@ st.components.v1.html(f"""
                     jpContainer.style.display = "none";
                     extra.style.display = "none";
                     showBtn.style.display = "block";
-                    isRevealed = false;
                 }}
             }} else {{
-                // 本文音読モード（以前の挙動を完全維持）
                 document.getElementById('jp').style.color = "#666";
                 jpContainer.style.display = "block";
                 extra.style.display = "none";
@@ -146,14 +144,6 @@ st.components.v1.html(f"""
             document.getElementById('status').innerText = (index + 1) + " / " + currentDataSet.length;
             if (shouldPlay) playAudio(item.audio);
         }}
-
-        // 答えを表示する処理
-        document.getElementById('btn-show').onclick = () => {{
-            document.getElementById('jp-container').style.display = "block";
-            document.getElementById('tango-extra').style.display = "block";
-            document.getElementById('btn-show').style.display = "none";
-            isRevealed = true;
-        }};
 
         function playAudio(src) {{
             if (timer) clearTimeout(timer);
@@ -165,13 +155,32 @@ st.components.v1.html(f"""
                         const delay = currentMode === 'text' ? 2200 : 3200;
                         timer = setTimeout(() => {{
                             if (!isAuto) return;
-                            index = (index + 1) % currentDataSet.length;
-                            updateCard();
+                            nextCard();
                         }}, delay);
                     }}
                 }};
-            }}).catch(e => console.log("Blocked"));
+            }}).catch(e => console.log("Play blocked"));
         }}
+
+        function nextCard() {{
+            if (isRandom) {{
+                index = Math.floor(Math.random() * currentDataSet.length);
+            }} else {{
+                index = (index + 1) % currentDataSet.length;
+            }}
+            updateCard();
+        }}
+
+        document.getElementById('btn-show').onclick = () => {{
+            document.getElementById('jp-container').style.display = "block";
+            document.getElementById('tango-extra').style.display = "block";
+            document.getElementById('btn-show').style.display = "none";
+        }};
+
+        document.getElementById('btn-random').onclick = () => {{
+            isRandom = !isRandom;
+            updateUI();
+        }};
 
         document.getElementById('mode-text').onclick = () => {{
             currentMode = 'text'; currentDataSet = textData; index = 0; isAuto = false;
@@ -182,7 +191,7 @@ st.components.v1.html(f"""
             updateUI(); updateCard(false);
         }};
 
-        document.getElementById('btn-next').onclick = () => {{ isAuto = false; index = (index + 1) % currentDataSet.length; updateCard(); updateUI(); }};
+        document.getElementById('btn-next').onclick = () => {{ isAuto = false; nextCard(); updateUI(); }};
         document.getElementById('btn-prev').onclick = () => {{ isAuto = false; index = (index - 1 + currentDataSet.length) % currentDataSet.length; updateCard(); updateUI(); }};
         document.getElementById('btn-auto').onclick = () => {{ isAuto = true; updateUI(); updateCard(); }};
         document.getElementById('btn-manual').onclick = () => {{ isAuto = false; updateUI(); updateCard(false); }};
@@ -199,6 +208,10 @@ st.components.v1.html(f"""
             document.getElementById('btn-manual').style.color = isAuto ? '#333' : 'white';
             document.getElementById('btn-auto').style.background = isAuto ? '#005088' : '#eee';
             document.getElementById('btn-auto').style.color = isAuto ? 'white' : '#333';
+            
+            document.getElementById('btn-random').style.background = isRandom ? '#f39c12' : '#eee';
+            document.getElementById('btn-random').style.color = isRandom ? 'white' : '#333';
+            
             document.getElementById('auto-extra').style.display = isAuto ? 'block' : 'none';
         }}
 
