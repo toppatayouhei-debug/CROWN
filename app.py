@@ -23,14 +23,6 @@ if 'index' not in st.session_state:
 if 'mode' not in st.session_state:
     st.session_state.mode = "手動"
 
-# --- 音声データ生成関数 ---
-def get_audio_base64(text):
-    tts = gTTS(text=text, lang='en')
-    fp = io.BytesIO()
-    tts.write_to_fp(fp)
-    fp.seek(0)
-    return base64.b64encode(fp.read()).decode()
-
 # --- タイトルの表示 ---
 st.title("🔊 CROWN音読ツール")
 
@@ -63,31 +55,26 @@ japanese_text = str(df.iloc[st.session_state.index, 1])
 
 # カード表示
 st.markdown(f"""
-    <div style="background-color: #f0f2f6; padding: 30px; border-radius: 15px; border-left: 10px solid #005088; text-align: center; margin-bottom: 10px;">
+    <div style="background-color: #f0f2f6; padding: 30px; border-radius: 15px; border-left: 10px solid #005088; text-align: center; margin-bottom: 20px;">
         <div style="font-size: 26px; font-weight: bold; color: #333;">{english_text}</div>
         <hr>
         <div style="font-size: 18px; color: #666;">{japanese_text}</div>
     </div>
     """, unsafe_allow_html=True)
 
-# --- 共通の音声再生ロジック（JavaScript） ---
-b64_audio = get_audio_base64(english_text)
+# --- 音声生成と再生バーの表示 ---
+tts = gTTS(text=english_text, lang='en')
+fp = io.BytesIO()
+tts.write_to_fp(fp)
+fp.seek(0)
+b64_audio = base64.b64encode(fp.read()).decode()
+
+# 標準のオーディオプレイヤー（これを一度クリックするとブラウザのブロックが解けます）
+st.audio(fp, format='audio/mp3', autoplay=True)
 
 # --- モード別実行ロジック ---
 
 if st.session_state.mode == "手動":
-    # 手動モード：表示された瞬間に一度だけ再生
-    st.components.v1.html(f"""
-        <script>
-            var audio = new Audio("data:audio/mp3;base64,{b64_audio}");
-            audio.play().catch(e => console.log("Manual play blocked"));
-        </script>
-    """, height=0)
-    
-    # 手動用ボタン
-    if st.button("▶️ もう一度再生", use_container_width=True):
-        st.rerun() # リロードすることでJSが再発動して再生される
-    
     col1, col2 = st.columns(2)
     with col1:
         if st.button("⬅️ 前へ", use_container_width=True):
@@ -99,18 +86,16 @@ if st.session_state.mode == "手動":
             st.rerun()
 
 else:
-    # オートモード：再生 ＋ 次へのタイマー
+    # オートモード
     wait_time = st.slider("切替間隔（秒）", 3, 15, 7)
     
     if st.button("⏹️ 停止して手動に戻る", use_container_width=True, type="primary"):
         st.session_state.mode = "手動"
         st.rerun()
 
+    # 自動再生を補助するJavaScript
     st.components.v1.html(f"""
         <script>
-            var audio = new Audio("data:audio/mp3;base64,{b64_audio}");
-            audio.play().catch(e => console.log("Auto play blocked"));
-            
             setTimeout(function() {{
                 window.parent.document.dispatchEvent(new CustomEvent("streamlit:render"));
             }}, {wait_time * 1000});
