@@ -5,7 +5,6 @@ import io
 import base64
 import json
 
-# タイトル（ブラウザのタブ名）もBuddyに変更
 st.set_page_config(page_title="CROWN Buddy", layout="centered")
 
 # --- 1. データの読み込み ---
@@ -29,7 +28,7 @@ def load_all_data():
 
 text_raw, tango_raw = load_all_data()
 
-# --- 2. 音声パック ---
+# --- 2. 音声パック (ロジック維持) ---
 @st.cache_data
 def prepare_assets(raw_data, is_tango=False):
     prepared = []
@@ -52,13 +51,30 @@ def prepare_assets(raw_data, is_tango=False):
         prepared.append(entry)
     return prepared
 
-# 読み込み画面もBuddy仕様で可愛く
-with st.spinner("🤖 Buddyが音声を準備中だよ..."):
+# 怖い🤖を廃止し、可愛いローディングに変更
+with st.spinner("✨ Buddyが教材を可愛く準備中..."):
     text_json = json.dumps(prepare_assets(text_raw, False))
     tango_json = json.dumps(prepare_assets(tango_raw, True))
 
-# 可愛いロボットアイコン付きのタイトル
-st.markdown("<h1 style='text-align: center; color: #4a90e2; font-family: Comic Sans MS, cursive;'>🤖 CROWN Buddy</h1>", unsafe_allow_html=True)
+# --- 可愛いミニロボット付きタイトル ---
+# SVGで小さな、角の丸い愛らしいロボットを描画
+robot_svg = """
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 10px;">
+<rect x="2" y="6" width="20" height="15" rx="4" fill="#4a90e2"/>
+<circle cx="7.5" cy="11.5" r="1.5" fill="white"/>
+<circle cx="16.5" cy="11.5" r="1.5" fill="white"/>
+<rect x="9" y="16" width="6" height="2" rx="1" fill="white"/>
+<path d="M12 2V6" stroke="#4a90e2" stroke-width="2" stroke-linecap="round"/>
+<circle cx="12" cy="2" r="1" fill="#ff6b6b"/>
+</svg>
+"""
+
+st.markdown(f"""
+    <div style='text-align: center; display: flex; justify-content: center; align-items: center; margin-bottom: 20px;'>
+        {robot_svg}
+        <h1 style='color: #4a90e2; font-family: Comic Sans MS, cursive; margin: 0; font-size: 32px;'>CROWN Buddy</h1>
+    </div>
+""", unsafe_allow_html=True)
 
 # --- 3. メインUI ---
 st.components.v1.html(f"""
@@ -76,9 +92,7 @@ st.components.v1.html(f"""
         </div>
 
         <div id="card" style="background: #ffffff; padding: 40px 25px; border-radius: 30px; text-align: center; min-height: 280px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 10px 25px rgba(74,144,226,0.1); border: 2px solid #f0f4f8; transition: 0.3s; position: relative;">
-            
             <div style="position: absolute; top: 15px; left: 15px; width: 12px; height: 12px; background: #4a90e2; border-radius: 50%;"></div>
-
             <div id="eng" style="font-size: 30px; font-weight: 800; margin-bottom: 15px; color: #2c3e50; line-height: 1.2;"></div>
             
             <div id="jp-container">
@@ -93,8 +107,8 @@ st.components.v1.html(f"""
         </div>
 
         <div id="nav-controls" style="margin-top: 30px; display: flex; gap: 20px; justify-content: center;">
-            <button id="btn-prev" style="width: 70px; height: 70px; border-radius: 50%; background: #fff; border: 1px solid #eee; font-size: 28px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.2s;">⬅️</button>
-            <button id="btn-next" style="width: 70px; height: 70px; border-radius: 50%; background: #fff; border: 1px solid #eee; font-size: 28px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.2s;">➡️</button>
+            <button id="btn-prev" style="width: 70px; height: 70px; border-radius: 50%; background: #fff; border: 1px solid #eee; font-size: 28px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.2s; -webkit-tap-highlight-color: transparent;">⬅️</button>
+            <button id="btn-next" style="width: 70px; height: 70px; border-radius: 50%; background: #fff; border: 1px solid #eee; font-size: 28px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.2s; -webkit-tap-highlight-color: transparent;">➡️</button>
         </div>
 
         <div id="auto-extra" style="display: none; margin-top: 20px;">
@@ -127,7 +141,6 @@ st.components.v1.html(f"""
             const jpContainer = document.getElementById('jp-container');
 
             if (currentMode === 'tango') {{
-                // 単語モードは少しピンク系の意味色に
                 document.getElementById('jp').style.color = "#e056fd";
                 document.getElementById('ex').innerText = item.ex || "";
                 document.getElementById('ext').innerText = item.ext || "";
@@ -142,7 +155,6 @@ st.components.v1.html(f"""
                     showBtn.style.display = "block";
                 }}
             }} else {{
-                // 本文モードは落ち着いたグレー（挙動維持）
                 document.getElementById('jp').style.color = "#7f8c8d";
                 jpContainer.style.display = "block";
                 extra.style.display = "none";
@@ -160,7 +172,6 @@ st.components.v1.html(f"""
             currentAudio.play().then(() => {{
                 currentAudio.onended = () => {{
                     if (isAuto) {{
-                        // 本文音読の2.2秒待機は絶対維持
                         const delay = currentMode === 'text' ? 2200 : 3200;
                         timer = setTimeout(() => {{
                             if (!isAuto) return;
@@ -180,7 +191,6 @@ st.components.v1.html(f"""
             updateCard();
         }}
 
-        // イベント関連
         document.getElementById('btn-show').onclick = () => {{
             document.getElementById('jp-container').style.display = "block";
             document.getElementById('tango-extra').style.display = "block";
@@ -207,7 +217,6 @@ st.components.v1.html(f"""
         document.getElementById('btn-manual').onclick = () => {{ isAuto = false; updateUI(); updateCard(false); }};
         document.getElementById('btn-stop').onclick = () => {{ isAuto = false; currentAudio.pause(); updateUI(); }};
 
-        // 可愛いUIの更新
         function updateUI() {{
             const isText = (currentMode === 'text');
             const modeText = document.getElementById('mode-text');
@@ -222,31 +231,26 @@ st.components.v1.html(f"""
             const btnAuto = document.getElementById('btn-auto');
             const btnRandom = document.getElementById('btn-random');
 
-            // 手動ボタン
             btnManual.style.background = isAuto ? '#fff' : '#333';
             btnManual.style.color = isAuto ? '#555' : '#fff';
             btnManual.style.border = isAuto ? '1px solid #ddd' : '1px solid #333';
 
-            // オートボタン（可愛いロボットカラー）
             btnAuto.style.background = isAuto ? '#4a90e2' : '#fff';
             btnAuto.style.color = isAuto ? '#fff' : '#555';
             btnAuto.style.border = isAuto ? '1px solid #4a90e2' : '1px solid #ddd';
-            btnAuto.style.boxShadow = isAuto ? '0 4px 10px rgba(74,144,226,0.2)' : 'none';
 
-            // ランダムボタン（可愛いオレンジ）
             btnRandom.style.background = isRandom ? '#f39c12' : '#fff';
             btnRandom.style.color = isRandom ? '#fff' : '#555';
             btnRandom.style.border = isRandom ? '1px solid #f39c12' : '1px solid #ddd';
-            btnRandom.style.boxShadow = isRandom ? '0 4px 10px rgba(243,156,18,0.2)' : 'none';
             
             document.getElementById('auto-extra').style.display = isAuto ? 'block' : 'none';
         }}
 
-        // ホバーエフェクト（JSで実装）
+        // iPadでのホバー時の色残りを防止
         const btns = document.querySelectorAll('button');
         btns.forEach(btn => {{
-            btn.addEventListener('mouseover', () => {{ btn.style.transform = 'scale(1.03)'; }});
-            btn.addEventListener('mouseout', () => {{ btn.style.transform = 'scale(1)'; }});
+            btn.addEventListener('touchstart', () => {{ btn.style.transform = 'scale(0.98)'; }});
+            btn.addEventListener('touchend', () => {{ btn.style.transform = 'scale(1)'; }});
         }});
 
         updateCard(false);
