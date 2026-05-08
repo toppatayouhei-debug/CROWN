@@ -23,7 +23,7 @@ if 'index' not in st.session_state:
 if 'mode' not in st.session_state:
     st.session_state.mode = "手動"
 
-# --- 音声再生用関数 ---
+# --- 改良版：音声再生関数 ---
 def play_audio(text):
     if text:
         tts = gTTS(text=text, lang='en')
@@ -31,8 +31,24 @@ def play_audio(text):
         tts.write_to_fp(fp)
         fp.seek(0)
         b64 = base64.b64encode(fp.read()).decode()
-        audio_html = f'<audio autoplay="true" src="data:audio/mp3;base64,{b64}"></audio>'
+        
+        # 1. 見えないオーディオプレイヤーを埋め込む
+        # 2. JavaScriptで強制的に再生を開始させる（ブラウザのブロック対策）
+        audio_html = f"""
+            <div id="audio-container">
+                <audio id="tts-audio" src="data:audio/mp3;base64,{b64}"></audio>
+                <script>
+                    var audio = document.getElementById('tts-audio');
+                    audio.play().catch(function(error) {{
+                        console.log("自動再生がブロックされました。ユーザー操作が必要です。");
+                    }});
+                </script>
+            </div>
+            """
         st.components.v1.html(audio_html, height=0)
+        
+        # 予備：標準のオーディオプレイヤーも小さく表示（確実に鳴らすため）
+        st.audio(fp, format='audio/mp3')
 
 # --- タイトルの表示 ---
 st.title("🔊 CROWN音読ツール")
@@ -51,36 +67,34 @@ with col_m2:
 
 st.divider()
 
-# --- カード操作ボタン（「先頭に戻る」を特等席に配置） ---
-col_nav1, col_nav2 = st.columns([1, 3])
+# --- ナビゲーション ---
+col_nav1, col_nav2 = st.columns([1, 2])
 with col_nav1:
-    # どのモードでも使えるリセットボタン
     if st.button("⏮️ 先頭に戻る", use_container_width=True):
         st.session_state.index = 0
         st.rerun()
 with col_nav2:
-    st.caption(f"現在の位置: {st.session_state.index + 1} / {len(df)} 枚目")
+    st.write(f"📍 {st.session_state.index + 1} / {len(df)} 枚目")
 
-# --- 現在のカードデータ取得 ---
+# --- 現在のデータ取得 ---
 english_text = str(df.iloc[st.session_state.index, 0])
 japanese_text = str(df.iloc[st.session_state.index, 1])
 
-# カードの表示
+# カード表示
 st.markdown(f"""
-    <div style="background-color: #f0f2f6; padding: 30px; border-radius: 15px; border-left: 10px solid #005088; text-align: center; margin-bottom: 20px;">
-        <div style="font-size: 28px; font-weight: bold; color: #333; margin-bottom: 10px;">{english_text}</div>
-        <div style="font-size: 20px; color: #666; border-top: 1px solid #ccc; padding-top: 10px;">{japanese_text}</div>
+    <div style="background-color: #f0f2f6; padding: 30px; border-radius: 15px; border-left: 10px solid #005088; text-align: center; margin-bottom: 10px;">
+        <div style="font-size: 26px; font-weight: bold; color: #333;">{english_text}</div>
+        <hr>
+        <div style="font-size: 18px; color: #666;">{japanese_text}</div>
     </div>
     """, unsafe_allow_html=True)
 
-# --- モード別実行ロジック ---
-
+# --- 実行ロジック ---
 if st.session_state.mode == "手動":
-    # 再生ボタン
+    # 手動モードはボタンを押した時だけ鳴らす
     if st.button("▶️ 英語を再生", use_container_width=True):
         play_audio(english_text)
     
-    # 前後移動
     col1, col2 = st.columns(2)
     with col1:
         if st.button("⬅️ 前へ", use_container_width=True):
@@ -92,17 +106,16 @@ if st.session_state.mode == "手動":
             st.rerun()
 
 else:
-    # --- オートモード ---
-    st.info("🤖 オート再生中...")
+    # オートモードは表示された瞬間に鳴らす
     play_audio(english_text)
     
-    if st.button("⏹️ オートを停止して手動に戻る", use_container_width=True, type="primary"):
+    if st.button("⏹️ 停止して手動に戻る", use_container_width=True, type="primary"):
         st.session_state.mode = "手動"
         st.rerun()
     
-    wait_time = st.slider("間隔（秒）", 3, 12, 6)
+    wait_time = st.slider("切替間隔（秒）", 3, 15, 7)
     
-    # JavaScriptによる自動遷移
+    # 自動遷移JavaScript
     st.components.v1.html(
         f"""
         <script>
@@ -113,7 +126,6 @@ else:
         """,
         height=0
     )
-    # インデックスを次に進める（自動でループする設定）
     st.session_state.index = (st.session_state.index + 1) % len(df)
 
 st.divider()
