@@ -1,8 +1,5 @@
 import streamlit as st
 import pandas as pd
-from gtts import gTTS
-import io
-import base64
 import json
 
 st.set_page_config(page_title="CROWN音読ツール", layout="centered")
@@ -19,137 +16,108 @@ def load_data():
 data_list = load_data()
 data_json = json.dumps(data_list)
 
-# --- セッション管理 ---
-if 'index' not in st.session_state:
-    st.session_state.index = 0
-if 'mode' not in st.session_state:
-    st.session_state.mode = "手動"
-
 st.title("🔊 CROWN音読ツール")
 
-# --- PCかiPadかを判別するためのJavaScript ---
-# ブラウザの情報を取得してStreamlit側に送る
-is_mobile = st.components.v1.html("""
-<script>
-    var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    window.parent.postMessage({type: 'set_mobile', value: isMobile}, '*');
-</script>
-""", height=0)
-
-# デフォルトはPC（Googleボイス）として、モバイルならJS側に任せる
-use_js_engine = False
-ua = st.query_params.get("ua", "pc") # 簡易的な判別用（必要に応じて）
-
-# --- メイン画面の構成 ---
-# ここからはiPad/PC共通の表示エリア
-col_m1, col_m2 = st.columns(2)
-with col_m1:
-    if st.button("👆 手動モード", use_container_width=True, type="primary" if st.session_state.mode == "手動" else "secondary"):
-        st.session_state.mode = "手動"
-        st.rerun()
-with col_m2:
-    if st.button("🤖 オートモード", use_container_width=True, type="primary" if st.session_state.mode == "オート" else "secondary"):
-        st.session_state.mode = "オート"
-        st.rerun()
-
-st.divider()
-
-# 現在のカードデータ
-eng = data_list[st.session_state.index][0]
-jp = data_list[st.session_state.index][1]
-
-st.write(f"📍 {st.session_state.index + 1} / {len(data_list)} 枚目")
-st.markdown(f"""
-    <div style="background-color: #f0f2f6; padding: 40px 20px; border-radius: 20px; border-left: 10px solid #005088; text-align: center;">
-        <div style="font-size: 30px; font-weight: bold; color: #333;">{eng}</div>
-        <hr style="width: 50%; margin: 20px auto; border: 0.5px solid #ccc;">
-        <div style="font-size: 20px; color: #666;">{jp}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# --- モード別の出し分け ---
-
-# PCかつ手動/オートの場合は以前のGoogleボイス(gTTS)方式
-# ただしiPadの場合は「すべての処理を1つのJSコンポーネント」で行う
-
+# --- メインロジック（JavaScript完結型） ---
+# Googleの高品質な音声を使いつつ、iPadで連続再生させるための最新ロジック
 st.components.v1.html(f"""
-    <div id="controls" style="font-family: sans-serif;">
-        <div id="nav" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px;">
-            <button id="p-prev" style="padding: 20px; border-radius: 12px; background: white; border: 1px solid #ddd; font-size: 20px;">⬅️ 前へ</button>
-            <button id="p-next" style="padding: 20px; border-radius: 12px; background: white; border: 1px solid #ddd; font-size: 20px;">次へ ➡️</button>
+    <div id="study-app" style="font-family: -apple-system, sans-serif; color: #333;">
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button id="btn-manual" style="flex: 1; padding: 15px; border-radius: 12px; border: none; background: #005088; color: white; font-weight: bold;">👆 手動</button>
+            <button id="btn-auto" style="flex: 1; padding: 15px; border-radius: 12px; border: none; background: #f0f2f6; color: #333; font-weight: bold;">🤖 オート</button>
         </div>
-        <div id="auto-stop-area" style="display: none; margin-top: 15px;">
-            <button id="p-stop" style="width: 100%; padding: 15px; border-radius: 12px; background: #ff4b4b; color: white; border: none; font-weight: bold;">⏹️ オートを止める</button>
+
+        <div id="card" style="background-color: #f0f2f6; padding: 40px 20px; border-radius: 20px; border-left: 10px solid #005088; text-align: center; min-height: 160px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+            <div id="eng" style="font-size: 28px; font-weight: bold; margin-bottom: 15px; line-height: 1.3;">読み込み中...</div>
+            <hr style="width: 50%; border: 0.5px solid #ccc; margin: 15px auto;">
+            <div id="jp" style="font-size: 18px; color: #666;"></div>
+        </div>
+
+        <div id="nav-controls" style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <button id="btn-prev" style="padding: 20px; border-radius: 12px; background: white; border: 1px solid #ddd; font-size: 20px;">⬅️ 前へ</button>
+            <button id="btn-next" style="padding: 20px; border-radius: 12px; background: white; border: 1px solid #ddd; font-size: 20px;">次へ ➡️</button>
+        </div>
+
+        <div id="auto-extra" style="display: none; margin-top: 15px;">
+            <button id="btn-stop" style="width: 100%; padding: 15px; border-radius: 12px; background: #ff4b4b; color: white; border: none; font-weight: bold;">⏹️ オートを止める</button>
+        </div>
+
+        <div style="margin-top: 20px; text-align: center;">
+            <div id="status" style="font-size: 14px; color: #888; font-weight: bold; margin-bottom:10px;"></div>
+            <button id="btn-reset" style="padding: 8px 15px; border-radius: 8px; background: #eee; border: none; font-size: 13px;">⏮️ 最初から</button>
         </div>
     </div>
 
     <script>
         const data = {data_json};
-        let index = {st.session_state.index};
-        let isAuto = { "true" if st.session_state.mode == "オート" else "false" };
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        const synth = window.speechSynthesis;
+        let index = 0;
+        let isAuto = false;
         let timer = null;
+        let currentAudio = null;
 
-        function getVoice() {{
-            const vs = synth.getVoices();
-            return vs.find(v => (v.name.includes('拡張') || v.name.includes('プレミアム') || v.name.includes('Enhanced') || v.name.includes('Premium') || v.name.includes('Siri')) && v.lang.includes('en')) || vs.find(v => v.lang.startsWith('en'));
-        }}
-
-        // GoogleボイスのURL生成（PC用）
-        function getGoogleAudioUrl(text) {{
+        // --- Google読み上げURLの生成 ---
+        function getGoogleUrl(text) {{
             return "https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=" + encodeURIComponent(text);
         }}
 
-        function play() {{
-            const text = data[index][0];
-            if (isMobile) {{
-                // iPadなら内蔵ボイス
-                synth.cancel();
-                const u = new SpeechSynthesisUtterance(text);
-                u.voice = getVoice();
-                u.lang = 'en-US';
-                u.rate = 0.9;
-                u.onend = () => {{ if(isAuto) timer = setTimeout(next, 2500); }};
-                synth.speak(u);
-            }} else {{
-                // PCならGoogleボイス
-                if (window.currentAudio) window.currentAudio.pause();
-                const audio = new Audio(getGoogleAudioUrl(text));
-                window.currentAudio = audio;
-                audio.play();
-                audio.onended = () => {{ if(isAuto) timer = setTimeout(next, 2500); }};
+        function speak(text) {{
+            if (currentAudio) {{
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
             }}
+            if (timer) clearTimeout(timer);
+
+            // Googleの音声URLを指定
+            currentAudio = new Audio(getGoogleUrl(text));
+            
+            currentAudio.onended = function() {{
+                if (isAuto) {{
+                    timer = setTimeout(() => {{
+                        if (!isAuto) return;
+                        index = (index + 1) % data.length;
+                        updateCard();
+                    }}, 2200); // 終わってから2.2秒後に次へ
+                }}
+            }};
+
+            // 再生（iPadの場合、最初のクリックがないとエラーになるが、ボタンを押した際にこれが呼ばれるのでOK）
+            currentAudio.play().catch(e => {{
+                console.log("Audio play failed, waiting for user interaction.");
+            }});
         }}
 
-        function next() {{
-            index = (index + 1) % data.length;
-            syncToStreamlit();
+        function updateCard() {{
+            document.getElementById('eng').innerText = data[index][0];
+            document.getElementById('jp').innerText = data[index][1];
+            document.getElementById('status').innerText = (index + 1) + " / " + data.length;
+            speak(data[index][0]);
         }}
 
-        function syncToStreamlit() {{
-            // StreamlitのURLを叩いてindexを同期させる（手動・オート両用）
-            window.parent.postMessage({{type: 'set_index', value: index}}, '*');
-            // 表示更新
-            location.href = "?idx=" + index + "&mode=" + (isAuto ? "auto" : "manual");
-        }}
-
-        // モードに合わせてボタン表示切替
-        document.getElementById('auto-stop-area').style.display = isAuto ? 'block' : 'none';
+        // 各ボタンイベント
+        document.getElementById('btn-next').onclick = () => {{ isAuto = false; index = (index + 1) % data.length; updateCard(); updateUI(); }};
+        document.getElementById('btn-prev').onclick = () => {{ isAuto = false; index = (index - 1 + data.length) % data.length; updateCard(); updateUI(); }};
+        document.getElementById('btn-reset').onclick = () => {{ isAuto = false; index = 0; updateCard(); updateUI(); }};
+        document.getElementById('btn-stop').onclick = () => {{ isAuto = false; if(currentAudio) currentAudio.pause(); updateUI(); }};
         
-        document.getElementById('p-next').onclick = () => {{ isAuto = false; next(); }};
-        document.getElementById('p-prev').onclick = () => {{ isAuto = false; index = (index - 1 + data.length) % data.length; syncToStreamlit(); }};
-        document.getElementById('p-stop').onclick = () => {{ isAuto = false; location.href = "?idx=" + index + "&mode=manual"; }};
+        document.getElementById('btn-manual').onclick = () => {{ isAuto = false; updateUI(); }};
+        document.getElementById('btn-auto').onclick = () => {{ 
+            isAuto = true; 
+            updateUI(); 
+            updateCard(); 
+        }};
 
-        // 初回再生
-        setTimeout(play, 500);
+        function updateUI() {{
+            document.getElementById('btn-manual').style.background = isAuto ? '#f0f2f6' : '#005088';
+            document.getElementById('btn-manual').style.color = isAuto ? '#333' : 'white';
+            document.getElementById('btn-auto').style.background = isAuto ? '#005088' : '#f0f2f6';
+            document.getElementById('btn-auto').style.color = isAuto ? 'white' : '#333';
+            document.getElementById('auto-extra').style.display = isAuto ? 'block' : 'none';
+        }}
+
+        // 最初は表示だけ
+        document.getElementById('eng').innerText = data[0][0];
+        document.getElementById('jp').innerText = data[0][1];
+        document.getElementById('status').innerText = "1 / " + data.length;
     </script>
-""", height=250)
-
-# --- URLパラメータによる同期 ---
-params = st.query_params
-if "idx" in params:
-    new_idx = int(params["idx"])
-    if new_idx != st.session_state.index:
-        st.session_state.index = new_idx
-        # st.rerun() すると無限ループするので注意。JS側で表示を完結させている。
+""", height=600)
