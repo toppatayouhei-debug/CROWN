@@ -3,60 +3,47 @@ import pandas as pd
 from gtts import gTTS
 import io
 
-# ページの設定：タイトルを「CROWN読み上げアプリ」に変更
+# ページの設定
 st.set_page_config(page_title="CROWN読み上げアプリ", layout="wide", page_icon="🔊")
 
-# デザインの調整（CSSで文字サイズなどを微調整）
-st.markdown("""
-    <style>
-    .main {
-        background-color: #f8f9fa;
-    }
-    .stButton>button {
-        width: 100%;
-        border-radius: 20px;
-        background-color: #005088;
-        color: white;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
 st.title("🔊 CROWN読み上げアプリ")
-st.write("スプレッドシートを更新すると、自動で最新の英文リストが表示されます。")
 
-# --- 設定：スプレッドシートのURL ---
-# 末尾が /export?format=csv になっているか確認してください
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1qyQham1gCOYqnQSeIZwLWYyf8guYTeECxXNC1hTEhwY/export?format=csv"
+# --- 設定：CSVファイルを読み込む ---
+# アップロードしたファイル名が「data.csv」ならこのままでOK
+CSV_FILE = "data.csv"
 
-@st.cache_data(ttl=600) # 10分間キャッシュを保持
-def load_data(url):
+@st.cache_data
+def load_data():
     try:
-        return pd.read_csv(url)
+        # GitHubにアップロードしたCSVファイルを読み込む
+        df = pd.read_csv(CSV_FILE)
+        return df
     except Exception as e:
+        # エラーが出た場合のダミーデータ
         return pd.DataFrame([
-            {"English": "Welcome to CROWN Reading App!", "Japanese": "アプリへようこそ！スプレッドシートを接続してください。"}
+            {"English": "Error: data.csv not found", "Japanese": "data.csvが見つかりません。GitHubにアップロードされているか確認してください。"}
         ])
 
 # データの読み込み
-df = load_data(SHEET_URL)
+df = load_data()
 
-# リストの表示
+# リストの表示と読み上げ機能
 for i, row in df.iterrows():
-    with st.container():
-        # 枠のデザインを適用
-        st.markdown(f"### Section {i+1}")
-        col1, col2 = st.columns([4, 1])
+    with st.container(border=True):
+        col1, col2 = st.columns([3, 1])
         
         with col1:
-            st.info(f"**{row['English']}**")
-            st.write(f"*{row['Japanese']}*")
+            # CSVの1行目の見出しが「English」「Japanese」である必要があります
+            st.subheader(f"Sentence {i+1}")
+            st.write(f"**{row['English']}**")
+            st.info(row['Japanese'])
         
         with col2:
             if st.button(f"再生", key=f"btn_{i}"):
-                tts = gTTS(text=row['English'], lang='en')
+                tts = gTTS(text=str(row['English']), lang='en')
                 audio_fp = io.BytesIO()
                 tts.write_to_fp(audio_fp)
                 st.audio(audio_fp, format='audio/mp3', autoplay=True)
-        st.divider()
 
+st.divider()
 st.caption("Developed with Streamlit & gTTS")
