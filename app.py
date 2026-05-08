@@ -23,37 +23,18 @@ if 'index' not in st.session_state:
 if 'mode' not in st.session_state:
     st.session_state.mode = "手動"
 
-# --- 改良版：音声再生関数 ---
-def play_audio(text):
-    if text:
-        tts = gTTS(text=text, lang='en')
-        fp = io.BytesIO()
-        tts.write_to_fp(fp)
-        fp.seek(0)
-        b64 = base64.b64encode(fp.read()).decode()
-        
-        # 1. 見えないオーディオプレイヤーを埋め込む
-        # 2. JavaScriptで強制的に再生を開始させる（ブラウザのブロック対策）
-        audio_html = f"""
-            <div id="audio-container">
-                <audio id="tts-audio" src="data:audio/mp3;base64,{b64}"></audio>
-                <script>
-                    var audio = document.getElementById('tts-audio');
-                    audio.play().catch(function(error) {{
-                        console.log("自動再生がブロックされました。ユーザー操作が必要です。");
-                    }});
-                </script>
-            </div>
-            """
-        st.components.v1.html(audio_html, height=0)
-        
-        # 予備：標準のオーディオプレイヤーも小さく表示（確実に鳴らすため）
-        st.audio(fp, format='audio/mp3')
+# --- 音声データ生成関数 ---
+def get_audio_base64(text):
+    tts = gTTS(text=text, lang='en')
+    fp = io.BytesIO()
+    tts.write_to_fp(fp)
+    fp.seek(0)
+    return base64.b64encode(fp.read()).decode()
 
 # --- タイトルの表示 ---
 st.title("🔊 CROWN音読ツール")
 
-# --- モード選択ボタン ---
+# --- 学習モード選択 ---
 st.subheader("学習モードを選択")
 col_m1, col_m2 = st.columns(2)
 with col_m1:
@@ -89,11 +70,23 @@ st.markdown(f"""
     </div>
     """, unsafe_allow_html=True)
 
-# --- 実行ロジック ---
+# --- 共通の音声再生ロジック（JavaScript） ---
+b64_audio = get_audio_base64(english_text)
+
+# --- モード別実行ロジック ---
+
 if st.session_state.mode == "手動":
-    # 手動モードはボタンを押した時だけ鳴らす
-    if st.button("▶️ 英語を再生", use_container_width=True):
-        play_audio(english_text)
+    # 手動モード：表示された瞬間に一度だけ再生
+    st.components.v1.html(f"""
+        <script>
+            var audio = new Audio("data:audio/mp3;base64,{b64_audio}");
+            audio.play().catch(e => console.log("Manual play blocked"));
+        </script>
+    """, height=0)
+    
+    # 手動用ボタン
+    if st.button("▶️ もう一度再生", use_container_width=True):
+        st.rerun() # リロードすることでJSが再発動して再生される
     
     col1, col2 = st.columns(2)
     with col1:
@@ -106,26 +99,25 @@ if st.session_state.mode == "手動":
             st.rerun()
 
 else:
-    # オートモードは表示された瞬間に鳴らす
-    play_audio(english_text)
+    # オートモード：再生 ＋ 次へのタイマー
+    wait_time = st.slider("切替間隔（秒）", 3, 15, 7)
     
     if st.button("⏹️ 停止して手動に戻る", use_container_width=True, type="primary"):
         st.session_state.mode = "手動"
         st.rerun()
-    
-    wait_time = st.slider("切替間隔（秒）", 3, 15, 7)
-    
-    # 自動遷移JavaScript
-    st.components.v1.html(
-        f"""
+
+    st.components.v1.html(f"""
         <script>
-        setTimeout(function() {{
-            window.parent.document.dispatchEvent(new CustomEvent("streamlit:render"));
-        }}, {wait_time * 1000});
+            var audio = new Audio("data:audio/mp3;base64,{b64_audio}");
+            audio.play().catch(e => console.log("Auto play blocked"));
+            
+            setTimeout(function() {{
+                window.parent.document.dispatchEvent(new CustomEvent("streamlit:render"));
+            }}, {wait_time * 1000});
         </script>
-        """,
-        height=0
-    )
+    """, height=0)
+    
     st.session_state.index = (st.session_state.index + 1) % len(df)
+    st.info(f"🤖 次のカードまであと {wait_time} 秒...")
 
 st.divider()
