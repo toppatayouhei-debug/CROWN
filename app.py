@@ -52,20 +52,32 @@ st.components.v1.html(f"""
         let autoTimer = null;
         const synth = window.speechSynthesis;
 
-        // 【ここを強化】iPadの拡張音声（Premium/Enhanced）を優先的に探す
+        // --- 声の選別ロジック（強化版） ---
         function getBestVoice() {{
             const voices = synth.getVoices();
             
-            // 1. 「Enhanced(拡張)」や「Premium(高品質)」というキーワードが含まれる英語を探す
-            let premium = voices.find(v => (v.name.includes('Enhanced') || v.name.includes('Premium') || v.name.includes('Siri')) && v.lang.includes('en'));
+            // 英語(en)の声だけを対象にする
+            const enVoices = voices.filter(v => v.lang.includes('en'));
+
+            // 優先順位1: 拡張、プレミアム、Enhanced、Premiumが含まれるもの
+            let premium = enVoices.find(v => 
+                v.name.includes('拡張') || 
+                v.name.includes('プレミアム') || 
+                v.name.includes('Enhanced') || 
+                v.name.includes('Premium')
+            );
             if (premium) return premium;
 
-            // 2. なければ通常のSiriやSamanthaを探す
-            let siri = voices.find(v => (v.name.includes('Siri') || v.name.includes('Samantha')) && v.lang.includes('en'));
+            // 優先順位2: Siri, Samantha, Daniel などの主要な名前
+            let siri = enVoices.find(v => 
+                v.name.includes('Siri') || 
+                v.name.includes('Samantha') || 
+                v.name.includes('Daniel')
+            );
             if (siri) return siri;
 
-            // 3. それもなければ適当な英語
-            return voices.find(v => v.lang.startsWith('en'));
+            // 優先順位3: 何でもいいから英語
+            return enVoices[0];
         }}
 
         function speak(text) {{
@@ -74,7 +86,10 @@ st.components.v1.html(f"""
 
             const uttr = new SpeechSynthesisUtterance(text);
             const voice = getBestVoice();
-            if (voice) uttr.voice = voice;
+            if (voice) {{
+                uttr.voice = voice;
+                console.log("Selected voice:", voice.name); // どの声が選ばれたかログに出す
+            }}
             
             uttr.lang = 'en-US';
             uttr.rate = 0.9;
@@ -98,10 +113,12 @@ st.components.v1.html(f"""
             speak(data[index][0]);
         }}
 
-        // iPadでの音声リスト更新を検知
-        synth.onvoiceschanged = () => {{
-            console.log("Voices updated:", synth.getVoices().length);
-        }};
+        // iPadでのボイスリスト読み込み完了を待つ
+        if (speechSynthesis.onvoiceschanged !== undefined) {{
+            speechSynthesis.onvoiceschanged = () => {{
+                console.log("Voices reloaded");
+            }};
+        }}
 
         document.getElementById('btn-next').onclick = () => {{
             index = (index + 1) % data.length;
