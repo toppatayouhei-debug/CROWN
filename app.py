@@ -55,7 +55,7 @@ with st.spinner("✨ Buddyが教材を準備中..."):
     text_json = json.dumps(prepare_assets(text_raw, False))
     tango_json = json.dumps(prepare_assets(tango_raw, True))
 
-# --- タイトル表示の修正（文字化け・崩れ対策） ---
+# --- タイトル表示（タグを正しく閉じました） ---
 robot_svg = """
 <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 10px;">
 <rect x="2" y="6" width="20" height="15" rx="4" fill="#4a90e2"/>
@@ -67,6 +67,7 @@ robot_svg = """
 </svg>
 """
 
+# ここでタグが余らないように整理
 st.markdown(f"""
     <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
         {robot_svg}
@@ -74,8 +75,19 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-# --- 3. メインUI（ロジック完全維持） ---
+# --- 3. メインUI ---
 st.components.v1.html(f"""
+    <style>
+        @keyframes glow {{
+            0% {{ box-shadow: 0 10px 25px rgba(74,144,226,0.1); border-color: #f0f4f8; }}
+            50% {{ box-shadow: 0 0 30px rgba(74,144,226,0.5); border-color: #4a90e2; }}
+            100% {{ box-shadow: 0 10px 25px rgba(74,144,226,0.1); border-color: #f0f4f8; }}
+        }}
+        .playing {{
+            animation: glow 1.5s infinite ease-in-out;
+        }}
+    </style>
+
     <div id="study-app" style="font-family: 'Hiragino Maru Gothic ProN', 'Rounded Mplus 1c', sans-serif; color: #444; max-width: 550px; margin: auto;">
         
         <div style="display: flex; background: #e0e6ed; padding: 6px; border-radius: 20px; margin-bottom: 20px;">
@@ -89,7 +101,7 @@ st.components.v1.html(f"""
             <button id="btn-random" style="padding: 10px 20px; border-radius: 20px; border: 1px solid #ddd; background: #fff; color: #555; font-size: 12px; font-weight: bold;">🔀ランダム</button>
         </div>
 
-        <div id="card" style="background: #ffffff; padding: 40px 25px; border-radius: 30px; text-align: center; min-height: 280px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 10px 25px rgba(74,144,226,0.1); border: 2px solid #f0f4f8; position: relative;">
+        <div id="card" style="background: #ffffff; padding: 40px 25px; border-radius: 30px; text-align: center; min-height: 280px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 10px 25px rgba(74,144,226,0.1); border: 2px solid #f0f4f8; position: relative; transition: 0.3s;">
             <div style="position: absolute; top: 15px; left: 15px; width: 12px; height: 12px; background: #4a90e2; border-radius: 50%;"></div>
             <div id="eng" style="font-size: 28px; font-weight: 800; margin-bottom: 15px; color: #2c3e50; line-height: 1.2;"></div>
             
@@ -101,7 +113,7 @@ st.components.v1.html(f"""
                 </div>
             </div>
 
-            <button id="btn-show" style="display: none; margin: 25px auto 0; padding: 12px 30px; border-radius: 25px; border: none; background: #4a90e2; color: white; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 4px 10px rgba(74,144,226,0.3);">🔍 意味をチェック</button>
+            <button id="btn-show" style="display: none; margin: 25px auto 0; padding: 12px 30px; border-radius: 25px; border: none; background: #4a90e2; color: white; font-weight: bold; cursor: pointer; font-size: 14px;">🔍 意味をチェック</button>
         </div>
 
         <div id="nav-controls" style="margin-top: 30px; display: flex; gap: 20px; justify-content: center;">
@@ -119,8 +131,8 @@ st.components.v1.html(f"""
     </div>
 
     <script>
-        const textData = {{text_json}};
-        const tangoData = {{tango_json}};
+        const textData = {text_json};
+        const tangoData = {tango_json};
         let currentDataSet = textData;
         let index = 0;
         let isAuto = false;
@@ -167,8 +179,13 @@ st.components.v1.html(f"""
             if (timer) clearTimeout(timer);
             currentAudio.pause();
             currentAudio.src = src;
+            
+            const card = document.getElementById('card');
+            card.classList.add('playing');
+
             currentAudio.play().then(() => {{
                 currentAudio.onended = () => {{
+                    card.classList.remove('playing');
                     if (isAuto) {{
                         const delay = currentMode === 'text' ? 2200 : 3200;
                         timer = setTimeout(() => {{
@@ -177,7 +194,10 @@ st.components.v1.html(f"""
                         }}, delay);
                     }}
                 }};
-            }}).catch(e => console.log("Play blocked"));
+            }}).catch(e => {{
+                card.classList.remove('playing');
+                console.log("Play blocked");
+            }});
         }}
 
         function nextCard() {{
@@ -213,7 +233,12 @@ st.components.v1.html(f"""
         document.getElementById('btn-prev').onclick = () => {{ isAuto = false; index = (index - 1 + currentDataSet.length) % currentDataSet.length; updateCard(); updateUI(); }};
         document.getElementById('btn-auto').onclick = () => {{ isAuto = true; updateUI(); updateCard(); }};
         document.getElementById('btn-manual').onclick = () => {{ isAuto = false; updateUI(); updateCard(false); }};
-        document.getElementById('btn-stop').onclick = () => {{ isAuto = false; currentAudio.pause(); updateUI(); }};
+        document.getElementById('btn-stop').onclick = () => {{ 
+            isAuto = false; 
+            currentAudio.pause(); 
+            document.getElementById('card').classList.remove('playing');
+            updateUI(); 
+        }};
 
         function updateUI() {{
             const isText = (currentMode === 'text');
