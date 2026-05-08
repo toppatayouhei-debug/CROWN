@@ -5,7 +5,8 @@ import io
 import base64
 import json
 
-st.set_page_config(page_title="CROWN Study Hub", layout="centered")
+# タイトル（ブラウザのタブ名）もBuddyに変更
+st.set_page_config(page_title="CROWN Buddy", layout="centered")
 
 # --- 1. データの読み込み ---
 @st.cache_data
@@ -51,52 +52,57 @@ def prepare_assets(raw_data, is_tango=False):
         prepared.append(entry)
     return prepared
 
-with st.spinner("教材を準備中..."):
+# 読み込み画面もBuddy仕様で可愛く
+with st.spinner("🤖 Buddyが音声を準備中だよ..."):
     text_json = json.dumps(prepare_assets(text_raw, False))
     tango_json = json.dumps(prepare_assets(tango_raw, True))
 
-st.title("🎓 CROWN Study Hub")
+# 可愛いロボットアイコン付きのタイトル
+st.markdown("<h1 style='text-align: center; color: #4a90e2; font-family: Comic Sans MS, cursive;'>🤖 CROWN Buddy</h1>", unsafe_allow_html=True)
 
 # --- 3. メインUI ---
 st.components.v1.html(f"""
-    <div id="study-app" style="font-family: -apple-system, sans-serif; color: #333;">
+    <div id="study-app" style="font-family: 'Hiragino Maru Gothic ProN', 'Rounded Mplus 1c', sans-serif; color: #444; max-width: 550px; margin: auto;">
         
-        <div style="display: flex; background: #eee; padding: 5px; border-radius: 12px; margin-bottom: 15px;">
-            <button id="mode-text" style="flex: 1; padding: 12px; border-radius: 10px; border: none; background: #005088; color: white; font-weight: bold;">📖 本文音読</button>
-            <button id="mode-tango" style="flex: 1; padding: 12px; border-radius: 10px; border: none; background: transparent; color: #333; font-weight: bold;">🗂️ 単語カード</button>
+        <div style="display: flex; background: #e0e6ed; padding: 6px; border-radius: 20px; margin-bottom: 20px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.05);">
+            <button id="mode-text" style="flex: 1; padding: 12px; border-radius: 16px; border: none; background: #4a90e2; color: white; font-weight: bold; font-size: 14px; cursor: pointer; transition: 0.3s; font-family: inherit;">📖 本文音読</button>
+            <button id="mode-tango" style="flex: 1; padding: 12px; border-radius: 16px; border: none; background: transparent; color: #555; font-weight: bold; font-size: 14px; cursor: pointer; transition: 0.3s; font-family: inherit;">🗂️ 単語カード</button>
         </div>
 
-        <div style="display: flex; gap: 5px; margin-bottom: 15px;">
-            <button id="btn-manual" style="flex: 1.5; padding: 10px; border-radius: 10px; border: none; background: #333; color: white; font-size: 12px; font-weight: bold;">👆 手動</button>
-            <button id="btn-auto" style="flex: 1.5; padding: 10px; border-radius: 10px; border: none; background: #eee; color: #333; font-size: 12px; font-weight: bold;">🤖 オート</button>
-            <button id="btn-random" style="flex: 1; padding: 10px; border-radius: 10px; border: none; background: #eee; color: #333; font-size: 12px; font-weight: bold;">🔀 ランダム</button>
+        <div style="display: flex; gap: 8px; margin-bottom: 20px; justify-content: center;">
+            <button id="btn-manual" style="padding: 10px 20px; border-radius: 20px; border: 1px solid #ddd; background: #fff; color: #555; font-size: 12px; font-weight: bold; cursor: pointer; transition: 0.3s;">👆手動</button>
+            <button id="btn-auto" style="padding: 10px 20px; border-radius: 20px; border: 1px solid #ddd; background: #fff; color: #555; font-size: 12px; font-weight: bold; cursor: pointer; transition: 0.3s;">🤖オート</button>
+            <button id="btn-random" style="padding: 10px 20px; border-radius: 20px; border: 1px solid #ddd; background: #fff; color: #555; font-size: 12px; font-weight: bold; cursor: pointer; transition: 0.3s;">🔀ランダム</button>
         </div>
 
-        <div id="card" style="background: #f8f9fa; padding: 35px 20px; border-radius: 25px; border-left: 12px solid #005088; text-align: center; min-height: 250px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 6px 15px rgba(0,0,0,0.1);">
-            <div id="eng" style="font-size: 28px; font-weight: 800; margin-bottom: 10px;"></div>
+        <div id="card" style="background: #ffffff; padding: 40px 25px; border-radius: 30px; text-align: center; min-height: 280px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 10px 25px rgba(74,144,226,0.1); border: 2px solid #f0f4f8; transition: 0.3s; position: relative;">
+            
+            <div style="position: absolute; top: 15px; left: 15px; width: 12px; height: 12px; background: #4a90e2; border-radius: 50%;"></div>
+
+            <div id="eng" style="font-size: 30px; font-weight: 800; margin-bottom: 15px; color: #2c3e50; line-height: 1.2;"></div>
             
             <div id="jp-container">
-                <div id="jp" style="font-size: 18px; color: #666; font-weight: bold;"></div>
-                <div id="tango-extra" style="display: none; border-top: 1px solid #ddd; margin-top: 15px; padding-top: 15px;">
-                    <div id="ex" style="font-size: 16px; color: #005088; font-weight: 500; font-style: italic; margin-bottom: 5px;"></div>
-                    <div id="ext" style="font-size: 14px; color: #6c757d;"></div>
+                <div id="jp" style="font-size: 19px; color: #7f8c8d; font-weight: bold; line-height: 1.3;"></div>
+                <div id="tango-extra" style="display: none; border-top: 1px solid #eee; margin-top: 20px; padding-top: 20px;">
+                    <div id="ex" style="font-size: 16px; color: #4a90e2; font-weight: 500; font-style: italic; margin-bottom: 10px; line-height: 1.4;"></div>
+                    <div id="ext" style="font-size: 14px; color: #95a5a6; line-height: 1.4;"></div>
                 </div>
             </div>
 
-            <button id="btn-show" style="display: none; margin: 20px auto 0; padding: 12px 25px; border-radius: 20px; border: 2px solid #005088; background: white; color: #005088; font-weight: bold;">🔍 意味をチェック</button>
+            <button id="btn-show" style="display: none; margin: 25px auto 0; padding: 12px 30px; border-radius: 25px; border: none; background: #4a90e2; color: white; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 4px 10px rgba(74,144,226,0.3); transition: 0.3s;">🔍 意味をチェック</button>
         </div>
 
-        <div id="nav-controls" style="margin-top: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-            <button id="btn-prev" style="padding: 22px; border-radius: 15px; background: white; border: 1px solid #ddd; font-size: 26px;">⬅️</button>
-            <button id="btn-next" style="padding: 22px; border-radius: 15px; background: white; border: 1px solid #ddd; font-size: 26px;">➡️</button>
+        <div id="nav-controls" style="margin-top: 30px; display: flex; gap: 20px; justify-content: center;">
+            <button id="btn-prev" style="width: 70px; height: 70px; border-radius: 50%; background: #fff; border: 1px solid #eee; font-size: 28px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.2s;">⬅️</button>
+            <button id="btn-next" style="width: 70px; height: 70px; border-radius: 50%; background: #fff; border: 1px solid #eee; font-size: 28px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.2s;">➡️</button>
         </div>
 
-        <div id="auto-extra" style="display: none; margin-top: 15px;">
-            <button id="btn-stop" style="width: 100%; padding: 18px; border-radius: 15px; background: #dc3545; color: white; border: none; font-weight: bold;">⏹️ オート停止</button>
+        <div id="auto-extra" style="display: none; margin-top: 20px;">
+            <button id="btn-stop" style="width: 100%; padding: 16px; border-radius: 20px; background: #ff6b6b; color: white; border: none; font-weight: bold; font-size: 15px; cursor: pointer; box-shadow: 0 4px 10px rgba(255,107,107,0.3);">⏹️ オート停止</button>
         </div>
 
-        <div style="margin-top: 25px; text-align: center;">
-            <div id="status" style="font-size: 14px; color: #adb5bd; font-weight: bold;"></div>
+        <div style="margin-top: 30px; text-align: center;">
+            <div id="status" style="font-size: 14px; color: #bdc3c7; font-weight: bold; letter-spacing: 1px;"></div>
         </div>
     </div>
 
@@ -121,7 +127,8 @@ st.components.v1.html(f"""
             const jpContainer = document.getElementById('jp-container');
 
             if (currentMode === 'tango') {{
-                document.getElementById('jp').style.color = "#d63384";
+                // 単語モードは少しピンク系の意味色に
+                document.getElementById('jp').style.color = "#e056fd";
                 document.getElementById('ex').innerText = item.ex || "";
                 document.getElementById('ext').innerText = item.ext || "";
                 
@@ -135,7 +142,8 @@ st.components.v1.html(f"""
                     showBtn.style.display = "block";
                 }}
             }} else {{
-                document.getElementById('jp').style.color = "#666";
+                // 本文モードは落ち着いたグレー（挙動維持）
+                document.getElementById('jp').style.color = "#7f8c8d";
                 jpContainer.style.display = "block";
                 extra.style.display = "none";
                 showBtn.style.display = "none";
@@ -152,6 +160,7 @@ st.components.v1.html(f"""
             currentAudio.play().then(() => {{
                 currentAudio.onended = () => {{
                     if (isAuto) {{
+                        // 本文音読の2.2秒待機は絶対維持
                         const delay = currentMode === 'text' ? 2200 : 3200;
                         timer = setTimeout(() => {{
                             if (!isAuto) return;
@@ -171,6 +180,7 @@ st.components.v1.html(f"""
             updateCard();
         }}
 
+        // イベント関連
         document.getElementById('btn-show').onclick = () => {{
             document.getElementById('jp-container').style.display = "block";
             document.getElementById('tango-extra').style.display = "block";
@@ -197,24 +207,48 @@ st.components.v1.html(f"""
         document.getElementById('btn-manual').onclick = () => {{ isAuto = false; updateUI(); updateCard(false); }};
         document.getElementById('btn-stop').onclick = () => {{ isAuto = false; currentAudio.pause(); updateUI(); }};
 
+        // 可愛いUIの更新
         function updateUI() {{
             const isText = (currentMode === 'text');
-            document.getElementById('mode-text').style.background = isText ? '#005088' : 'transparent';
-            document.getElementById('mode-text').style.color = isText ? 'white' : '#333';
-            document.getElementById('mode-tango').style.background = isText ? 'transparent' : '#005088';
-            document.getElementById('mode-tango').style.color = isText ? '#333' : 'white';
+            const modeText = document.getElementById('mode-text');
+            const modeTango = document.getElementById('mode-tango');
+
+            modeText.style.background = isText ? '#4a90e2' : 'transparent';
+            modeText.style.color = isText ? 'white' : '#555';
+            modeTango.style.background = isText ? 'transparent' : '#4a90e2';
+            modeTango.style.color = isText ? '#555' : 'white';
             
-            document.getElementById('btn-manual').style.background = isAuto ? '#eee' : '#333';
-            document.getElementById('btn-manual').style.color = isAuto ? '#333' : 'white';
-            document.getElementById('btn-auto').style.background = isAuto ? '#005088' : '#eee';
-            document.getElementById('btn-auto').style.color = isAuto ? 'white' : '#333';
-            
-            document.getElementById('btn-random').style.background = isRandom ? '#f39c12' : '#eee';
-            document.getElementById('btn-random').style.color = isRandom ? 'white' : '#333';
+            const btnManual = document.getElementById('btn-manual');
+            const btnAuto = document.getElementById('btn-auto');
+            const btnRandom = document.getElementById('btn-random');
+
+            // 手動ボタン
+            btnManual.style.background = isAuto ? '#fff' : '#333';
+            btnManual.style.color = isAuto ? '#555' : '#fff';
+            btnManual.style.border = isAuto ? '1px solid #ddd' : '1px solid #333';
+
+            // オートボタン（可愛いロボットカラー）
+            btnAuto.style.background = isAuto ? '#4a90e2' : '#fff';
+            btnAuto.style.color = isAuto ? '#fff' : '#555';
+            btnAuto.style.border = isAuto ? '1px solid #4a90e2' : '1px solid #ddd';
+            btnAuto.style.boxShadow = isAuto ? '0 4px 10px rgba(74,144,226,0.2)' : 'none';
+
+            // ランダムボタン（可愛いオレンジ）
+            btnRandom.style.background = isRandom ? '#f39c12' : '#fff';
+            btnRandom.style.color = isRandom ? '#fff' : '#555';
+            btnRandom.style.border = isRandom ? '1px solid #f39c12' : '1px solid #ddd';
+            btnRandom.style.boxShadow = isRandom ? '0 4px 10px rgba(243,156,18,0.2)' : 'none';
             
             document.getElementById('auto-extra').style.display = isAuto ? 'block' : 'none';
         }}
 
+        // ホバーエフェクト（JSで実装）
+        const btns = document.querySelectorAll('button');
+        btns.forEach(btn => {{
+            btn.addEventListener('mouseover', () => {{ btn.style.transform = 'scale(1.03)'; }});
+            btn.addEventListener('mouseout', () => {{ btn.style.transform = 'scale(1)'; }});
+        }});
+
         updateCard(false);
     </script>
-""", height=680)
+""", height=720)
