@@ -2,122 +2,83 @@ import streamlit as st
 import pandas as pd
 from gtts import gTTS
 import io
-import time
 
-# ページの設定
-st.set_page_config(page_title="CROWN Auto Flashcards", layout="centered", page_icon="🔊")
+st.set_page_config(page_title="CROWN Auto Flashcards", layout="centered")
 
-# --- スタイルの設定（カードを綺麗に見せる） ---
-st.markdown("""
-    <style>
-    .card-container {
-        background-color: #f8f9fa;
-        padding: 40px;
-        border-radius: 15px;
-        border-left: 10px solid #005088;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        text-align: center;
-        margin-bottom: 20px;
-    }
-    .en-text {
-        font-size: 32px;
-        font-weight: bold;
-        color: #333;
-        margin-bottom: 10px;
-    }
-    .jp-text {
-        font-size: 24px;
-        color: #666;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.title("🔊 CROWN 自動めくり学習")
-
-# --- データの読み込み設定 ---
+# --- データの読み込み ---
 @st.cache_data
 def load_data():
-    try:
-        # header=0 (デフォルト) で読み込むことで、1行目を無視してA2, B2からデータとして扱います
-        df = pd.read_csv("data.csv")
-        return df
-    except Exception as e:
-        return pd.DataFrame([["Error", "CSVファイル(data.csv)が見つかりません"]])
+    return pd.read_csv("data.csv") # 1行目は見出しとして無視
 
 df = load_data()
 
-# --- セッション状態の初期化 ---
+# --- セッション状態の管理 ---
 if 'index' not in st.session_state:
     st.session_state.index = 0
 if 'auto_mode' not in st.session_state:
     st.session_state.auto_mode = False
 
-# --- オート再生の制御ロジック ---
+st.title("🔊 CROWN 安定版オートめくり")
+
+# --- オート再生の心臓部（JavaScriptタイマー） ---
 if st.session_state.auto_mode:
-    # 現在のカード情報を取得
-    english_text = str(df.iloc[st.session_state.index, 0])
-    japanese_text = str(df.iloc[st.session_state.index, 1])
+    # 5000ミリ秒（5秒）ごとに自分自身をリロードさせるJavaScript
+    st.components.v1.html(
+        """
+        <script>
+        window.parent.document.dispatchEvent(new CustomEvent("streamlit:render"));
+        setTimeout(function() {
+            window.parent.document.querySelector('.stButton button').click();
+        }, 5000); 
+        </script>
+        """,
+        height=0,
+    )
+    # 5秒経ったらインデックスを進める処理
+    st.session_state.index = (st.session_state.index + 1) % len(df)
 
-    # カード表示
-    st.markdown(f"""
-        <div class="card-container">
-            <div class="en-text">{english_text}</div>
-            <hr>
-            <div class="jp-text">{japanese_text}</div>
-        </div>
-        """, unsafe_allow_html=True)
+# --- カード表示 ---
+english_text = str(df.iloc[st.session_state.index, 0])
+japanese_text = str(df.iloc[st.session_state.index, 1])
 
-    # 音声再生
-    tts = gTTS(text=english_text, lang='en')
-    audio_fp = io.BytesIO()
-    tts.write_to_fp(audio_fp)
-    st.audio(audio_fp, format='audio/mp3', autoplay=True)
+st.markdown(f"""
+    <div style="background-color: #f0f2f6; padding: 40px; border-radius: 15px; border-left: 10px solid #005088; text-align: center;">
+        <h1 style="color: #333;">{english_text}</h1>
+        <hr>
+        <h2 style="color: #666;">{japanese_text}</h2>
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.info(f"🔄 オート再生中... ({st.session_state.index + 1} / {len(df)})")
-    
-    # 停止ボタンを配置（オート中も止められるように）
-    if st.button("⏹️ オート再生を停止"):
+# --- 音声再生 ---
+tts = gTTS(text=english_text, lang='en')
+audio_fp = io.BytesIO()
+tts.write_to_fp(audio_fp)
+st.audio(audio_fp, format='audio/mp3', autoplay=True)
+
+# --- 操作パネル ---
+st.divider()
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    if st.button("⬅️ 前へ"):
+        st.session_state.index = (st.session_state.index - 1) % len(df)
+        st.session_state.auto_mode = False # 手動操作時はオートを切る
+        st.rerun()
+
+with col2:
+    if not st.session_state.auto_mode:
+        if st.button("▶️ オート開始"):
+            st.session_state.auto_mode = True
+            st.rerun()
+    else:
+        if st.button("⏹️ 停止"):
+            st.session_state.auto_mode = False
+            st.rerun()
+
+with col3:
+    if st.button("次へ ➡️"):
+        st.session_state.index = (st.session_state.index + 1) % len(df)
         st.session_state.auto_mode = False
         st.rerun()
 
-    # 5秒待機してから次へ
-    time.sleep(5)
-    st.session_state.index = (st.session_state.index + 1) % len(df)
-    st.rerun()
-
-else:
-    # --- 手動モードの表示 ---
-    english_text = str(df.iloc[st.session_state.index, 0])
-    japanese_text = str(df.iloc[st.session_state.index, 1])
-
-    st.markdown(f"""
-        <div class="card-container">
-            <div class="en-text">{english_text}</div>
-            <hr>
-            <div class="jp-text">{japanese_text}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # 手動再生ボタン
-    tts = gTTS(text=english_text, lang='en')
-    audio_fp = io.BytesIO()
-    tts.write_to_fp(audio_fp)
-    st.audio(audio_fp, format='audio/mp3', autoplay=True)
-
-    # 操作ボタン
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("⬅️ 前へ", use_container_width=True):
-            st.session_state.index = (st.session_state.index - 1) % len(df)
-            st.rerun()
-    with col2:
-        if st.button("▶️ オート開始", use_container_width=True):
-            st.session_state.auto_mode = True
-            st.rerun()
-    with col3:
-        if st.button("次へ ➡️", use_container_width=True):
-            st.session_state.index = (st.session_state.index + 1) % len(df)
-            st.rerun()
-
-st.divider()
-st.write(f"カード: {st.session_state.index + 1} / {len(df)}")
+st.write(f"Card: {st.session_state.index + 1} / {len(df)}")
