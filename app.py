@@ -3,6 +3,7 @@ import pandas as pd
 from gtts import gTTS
 import io
 import base64
+import json
 
 st.set_page_config(page_title="CROWN音読ツール", layout="centered")
 
@@ -10,123 +11,104 @@ st.set_page_config(page_title="CROWN音読ツール", layout="centered")
 @st.cache_data
 def load_data():
     try:
-        return pd.read_csv("data.csv")
+        df = pd.read_csv("data.csv")
+        # リスト形式に変換してJavaScriptに渡せるようにする
+        return df.values.tolist()
     except:
-        return pd.DataFrame([["Error", "CSV読み込み失敗"]])
+        return [["Error", "CSVが見つかりません"]]
 
-df = load_data()
+data_list = load_data()
 
-# --- セッション状態の初期化 ---
-if 'index' not in st.session_state:
-    st.session_state.index = 0
-if 'mode' not in st.session_state:
-    st.session_state.mode = "待機"
-
-# --- 音声生成関数 ---
-def get_audio_html(text, auto_next=False):
-    tts = gTTS(text=text, lang='en')
-    fp = io.BytesIO()
-    tts.write_to_fp(fp)
-    fp.seek(0)
-    b64 = base64.b64encode(fp.read()).decode()
-    
-    if auto_next:
-        # オートモード用：再生終了後に hidden_next_btn をクリック
-        return f"""
-            <audio id="audio-player" autoplay src="data:audio/mp3;base64,{b64}"></audio>
-            <script>
-                var audio = document.getElementById('audio-player');
-                audio.onended = function() {{
-                    setTimeout(function() {{
-                        window.parent.document.getElementById('hidden_next_btn').click();
-                    }}, 1000);
-                }};
-            </script>
-        """
-    else:
-        # 手動モード用：再生のみ
-        return f'<audio autoplay src="data:audio/mp3;base64,{b64}"></audio>'
-
-# --- メイン画面 ---
 st.title("🔊 CROWN音読ツール")
+st.write("iPad/iPhone対応版")
 
-# 1. 待機画面（ブラウザの音声ブロック解除用）
-if st.session_state.mode == "待機":
-    st.info("下のボタンを押して音読を開始してください。")
-    if st.button("🚀 学習をスタートする", use_container_width=True):
-        st.session_state.mode = "手動"
-        st.rerun()
-    st.stop()
+# --- メインロジック（JavaScriptで完結させる） ---
+# Python側からはデータを流し込むだけで、めくり処理はブラウザ側に任せます
 
-# 2. モード切替ボタン
-col_m1, col_m2 = st.columns(2)
-with col_m1:
-    if st.button("👆 手動モード", use_container_width=True, type="primary" if st.session_state.mode == "手動" else "secondary"):
-        st.session_state.mode = "手動"
-        st.rerun()
-with col_m2:
-    if st.button("🤖 オートモード", use_container_width=True, type="primary" if st.session_state.mode == "オート" else "secondary"):
-        st.session_state.mode = "オート"
-        st.rerun()
+data_json = json.dumps(data_list)
 
-st.divider()
+st.components.v1.html(f"""
+    <div id="study-app" style="font-family: sans-serif; color: #333;">
+        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button id="btn-manual" style="flex: 1; padding: 15px; border-radius: 10px; border: none; background: #005088; color: white; font-weight: bold;">👆 手動モード</button>
+            <button id="btn-auto" style="flex: 1; padding: 15px; border-radius: 10px; border: none; background: #f0f2f6; color: #333; font-weight: bold;">🤖 オートモード</button>
+        </div>
 
-# --- カード表示 ---
-eng = str(df.iloc[st.session_state.index, 0])
-jp = str(df.iloc[st.session_state.index, 1])
+        <div id="card" style="background-color: #f0f2f6; padding: 40px 20px; border-radius: 15px; border-left: 10px solid #005088; text-align: center; min-height: 150px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+            <div id="eng" style="font-size: 28px; font-weight: bold; margin-bottom: 20px;">読み込み中...</div>
+            <hr style="width: 80%; border: 0.5px solid #ccc; margin: 20px 0;">
+            <div id="jp" style="font-size: 20px; color: #666;"></div>
+        </div>
 
-st.write(f"📍 {st.session_state.index + 1} / {len(df)} 枚目")
-st.markdown(f"""
-    <div style="background-color: #f0f2f6; padding: 30px; border-radius: 15px; border-left: 10px solid #005088; text-align: center; margin-bottom: 10px;">
-        <div style="font-size: 26px; font-weight: bold; color: #333;">{eng}</div>
-        <hr>
-        <div style="font-size: 18px; color: #666;">{jp}</div>
+        <div id="controls" style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <button id="btn-prev" style="padding: 15px; border-radius: 10px; background: white; border: 1px solid #ccc;">⬅️ 前へ</button>
+            <button id="btn-next" style="padding: 15px; border-radius: 10px; background: white; border: 1px solid #ccc;">次へ ➡️</button>
+        </div>
+        
+        <button id="btn-reset" style="width: 100%; margin-top: 10px; padding: 10px; border-radius: 10px; background: #eee; border: none;">⏮️ 先頭に戻る</button>
+        
+        <div id="status" style="margin-top: 15px; text-align: center; color: #999; font-size: 14px;"></div>
     </div>
-    """, unsafe_allow_html=True)
 
-# --- モード別実行ロジック ---
-if st.session_state.mode == "手動":
-    st.components.v1.html(get_audio_html(eng), height=0)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("⬅️ 前へ", use_container_width=True):
-            st.session_state.index = (st.session_state.index - 1) % len(df)
-            st.rerun()
-    with col2:
-        if st.button("次へ ➡️", use_container_width=True):
-            st.session_state.index = (st.session_state.index + 1) % len(df)
-            st.rerun()
-else:
-    # オートモード
-    st.info("🤖 読み上げが終了すると自動で次へ進みます...")
-    if st.button("⏹️ オートを停止", use_container_width=True, type="primary"):
-        st.session_state.mode = "手動"
-        st.rerun()
-
-    # 自動更新用ボタン（IDを指定してJSから確実に叩く。かつ、CSSではなくStreamlitの機能で隠す）
-    if st.button("NEXT", key="hidden_next"):
-        st.session_state.index = (st.session_state.index + 1) % len(df)
-        st.rerun()
-    
-    st.components.v1.html(get_audio_html(eng, auto_next=True), height=0)
-
-# --- 最後の仕上げ：自動更新ボタンを「ID」で指定して透明にする ---
-# これなら他のボタンに影響を与えません
-st.markdown("""
     <script>
-        // ボタンにIDを付与する（強引ですが確実です）
-        var btns = window.parent.document.querySelectorAll('button');
-        for (var i = 0; i < btns.length; i++) {
-            if (btns[i].innerText === 'NEXT') {
-                btns[i].id = 'hidden_next_btn';
-                btns[i].style.display = 'none'; // 見えなくする
-            }
-        }
-    </script>
-    """, unsafe_allow_html=True)
+        const data = {data_json};
+        let index = 0;
+        let isAuto = false;
+        let synth = window.speechSynthesis; // iPad標準の音声合成を使用（確実性が高い）
 
-st.divider()
-if st.button("⏮️ 先頭に戻る", use_container_width=True):
-    st.session_state.index = 0
-    st.rerun()
+        const engEl = document.getElementById('eng');
+        const jpEl = document.getElementById('jp');
+        const statusEl = document.getElementById('status');
+        const btnAuto = document.getElementById('btn-auto');
+        const btnManual = document.getElementById('btn-manual');
+
+        function updateCard() {{
+            engEl.innerText = data[index][0];
+            jpEl.innerText = data[index][1];
+            statusEl.innerText = (index + 1) + " / " + data.length + " 枚目";
+            
+            // 音声再生
+            speak(data[index][0]);
+        }}
+
+        function speak(text) {{
+            synth.cancel(); // 前の音声を止める
+            const uttr = new SpeechSynthesisUtterance(text);
+            uttr.lang = 'en-US';
+            uttr.rate = 0.9;
+            
+            uttr.onend = function() {{
+                if (isAuto) {{
+                    setTimeout(() => {{
+                        if (!isAuto) return;
+                        index = (index + 1) % data.length;
+                        updateCard();
+                    }}, 2000); // 読み上げ終了から2秒後に次へ
+                }}
+            }};
+            synth.speak(uttr);
+        }}
+
+        document.getElementById('btn-next').onclick = () => {{ isAuto = false; index = (index + 1) % data.length; updateCard(); updateUI(); }};
+        document.getElementById('btn-prev').onclick = () => {{ isAuto = false; index = (index - 1 + data.length) % data.length; updateCard(); updateUI(); }};
+        document.getElementById('btn-reset').onclick = () => {{ isAuto = false; index = 0; updateCard(); updateUI(); }};
+        
+        btnManual.onclick = () => {{ isAuto = false; updateUI(); }};
+        btnAuto.onclick = () => {{ 
+            isAuto = true; 
+            updateUI();
+            updateCard(); // オート開始
+        }};
+
+        function updateUI() {{
+            btnManual.style.background = isAuto ? '#f0f2f6' : '#005088';
+            btnManual.style.color = isAuto ? '#333' : 'white';
+            btnAuto.style.background = isAuto ? '#005088' : '#f0f2f6';
+            btnAuto.style.color = isAuto ? 'white' : '#333';
+            document.getElementById('controls').style.display = isAuto ? 'none' : 'grid';
+        }}
+
+        // 初回起動
+        updateCard();
+    </script>
+""", height=600)
