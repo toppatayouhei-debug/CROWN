@@ -1,5 +1,5 @@
 import streamlit as st
-import pd
+import pandas as pd  # ここを修正しました
 import json
 
 st.set_page_config(page_title="CROWN音読ツール", layout="centered")
@@ -23,8 +23,8 @@ st.components.v1.html(f"""
     <div id="study-app" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #333;">
         
         <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-            <button id="btn-manual" style="flex: 1; padding: 15px; border-radius: 12px; border: none; background: #005088; color: white; font-weight: bold;">👆 手動</button>
-            <button id="btn-auto" style="flex: 1; padding: 15px; border-radius: 12px; border: none; background: #f0f2f6; color: #333; font-weight: bold;">🤖 オート</button>
+            <button id="btn-manual" style="flex: 1; padding: 15px; border-radius: 12px; border: none; background: #005088; color: white; font-weight: bold; font-size: 16px;">👆 手動</button>
+            <button id="btn-auto" style="flex: 1; padding: 15px; border-radius: 12px; border: none; background: #f0f2f6; color: #333; font-weight: bold; font-size: 16px;">🤖 オート</button>
         </div>
 
         <div id="card" style="background-color: #f0f2f6; padding: 40px 20px; border-radius: 20px; border-left: 10px solid #005088; text-align: center; min-height: 160px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
@@ -39,7 +39,7 @@ st.components.v1.html(f"""
         </div>
 
         <div id="auto-extra" style="display: none; margin-top: 15px;">
-            <button id="btn-stop" style="width: 100%; padding: 15px; border-radius: 12px; background: #ff4b4b; color: white; border: none; font-weight: bold;">⏹️ オートを止める</button>
+            <button id="btn-stop" style="width: 100%; padding: 15px; border-radius: 12px; background: #ff4b4b; color: white; border: none; font-weight: bold; font-size: 16px;">⏹️ オートを止める</button>
         </div>
 
         <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center; padding: 0 5px;">
@@ -55,52 +55,60 @@ st.components.v1.html(f"""
         let timer = null;
         const synth = window.speechSynthesis;
 
-        // 音声設定（iPadで最も綺麗な声を選ぶ）
+        // 【改善】高品質ボイスを確実に選ぶ
         let selectedVoice = null;
         function loadVoices() {{
             const voices = synth.getVoices();
-            // iPadの高品質ボイス（Siri, Samantha, Karen, Daniel）を優先
+            // iPadの高品質ボイスを優先（Siri, Samantha, Karen, Daniel）
             selectedVoice = voices.find(v => v.name.includes('Siri') && v.lang.includes('en')) ||
                             voices.find(v => v.name.includes('Samantha') && v.lang.includes('en')) ||
                             voices.find(v => v.name.includes('Karen') && v.lang.includes('en')) ||
                             voices.find(v => v.lang.startsWith('en-US')) ||
                             voices[0];
         }}
-        synth.onvoiceschanged = loadVoices;
+        
+        // iPadではこのイベントが重要
+        if (speechSynthesis.onvoiceschanged !== undefined) {{
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }}
         loadVoices();
 
         function updateCard(play = true) {{
             if (timer) clearTimeout(timer);
             
-            document.getElementById('eng').innerText = data[index][0];
+            const engText = data[index][0];
+            document.getElementById('eng').innerText = engText;
             document.getElementById('jp').innerText = data[index][1];
             document.getElementById('status').innerText = (index + 1) + " / " + data.length;
             
-            if (play) speak(data[index][0]);
+            if (play) speak(engText);
         }}
 
         function speak(text) {{
             synth.cancel();
             const uttr = new SpeechSynthesisUtterance(text);
+            
+            // 声がセットされていなければ再度探す
+            if (!selectedVoice) loadVoices();
             if (selectedVoice) uttr.voice = selectedVoice;
+            
             uttr.lang = 'en-US';
-            uttr.rate = 0.9;
+            uttr.rate = 0.9; 
             uttr.pitch = 1.0;
 
             uttr.onend = function() {{
                 if (isAuto) {{
-                    // 次のカードへ進む予約
                     timer = setTimeout(() => {{
                         if (!isAuto) return;
                         index = (index + 1) % data.length;
                         updateCard();
-                    }}, 2500);
+                    }}, 2200); // 終わってから2.2秒後に次へ
                 }}
             }};
             synth.speak(uttr);
         }}
 
-        // ボタンイベント
+        // イベント設定
         document.getElementById('btn-next').onclick = () => {{
             index = (index + 1) % data.length;
             updateCard();
@@ -137,7 +145,10 @@ st.components.v1.html(f"""
             document.getElementById('auto-extra').style.display = isAuto ? 'block' : 'none';
         }}
 
-        // 起動
-        setTimeout(updateCard, 500); 
+        // iPad対策：少し遅らせて初期化
+        setTimeout(() => {{
+            loadVoices();
+            updateCard(false); // 最初は音を鳴らさない（クリック待ち）
+        }}, 300);
     </script>
 """, height=600)
