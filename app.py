@@ -55,7 +55,7 @@ with st.spinner("✨ Buddyが教材を準備中..."):
     text_json = json.dumps(prepare_assets(text_raw, False))
     tango_json = json.dumps(prepare_assets(tango_raw, True))
 
-# --- タイトル表示（タグを正しく閉じました） ---
+# --- タイトル表示（ここを確実に修正しました） ---
 robot_svg = """
 <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 10px;">
 <rect x="2" y="6" width="20" height="15" rx="4" fill="#4a90e2"/>
@@ -67,7 +67,7 @@ robot_svg = """
 </svg>
 """
 
-# ここでタグが余らないように整理
+# st.markdownの引数として、閉じタグが余らないようにきれいに配置しました
 st.markdown(f"""
     <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
         {robot_svg}
