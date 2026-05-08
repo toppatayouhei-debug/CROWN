@@ -2,32 +2,8 @@ import streamlit as st
 import pandas as pd
 from gtts import gTTS
 import io
-import time
 
-st.set_page_config(page_title="CROWN Flashcards", layout="centered", page_icon="🎴")
-
-# --- スタイルの設定（カードっぽく見せる） ---
-st.markdown("""
-    <style>
-    .card-box {
-        background-color: white;
-        padding: 50px;
-        border-radius: 15px;
-        border: 2px solid #005088;
-        text-align: center;
-        min-height: 200px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 24px;
-        font-weight: bold;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        margin-bottom: 20px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.title("🎴 CROWN オートめくり学習")
+st.set_page_config(page_title="CROWN Flashcards", layout="centered")
 
 # --- データの読み込み ---
 @st.cache_data
@@ -36,68 +12,71 @@ def load_data():
 
 df = load_data()
 
-# --- 学習状態の管理 ---
+# --- セッション状態の初期化 ---
 if 'index' not in st.session_state:
     st.session_state.index = 0
-if 'show_answer' not in st.session_state:
-    st.session_state.show_answer = False
+if 'auto_play' not in st.session_state:
+    st.session_state.auto_play = False
 
-# 現在のデータ取得
+st.title("🎴 CROWN オート学習")
+
+# --- オート再生のタイマー設定 ---
+if st.session_state.auto_play:
+    # 5000ミリ秒（5秒）ごとに画面を強制リフレッシュして次へ進む
+    st.info("🔄 オート再生中...（5秒ごとに次へ進みます）")
+    st.empty() 
+    # このコンポーネントが指定秒数ごとにスクリプトを再実行させる
+    st_autorefresh = st.empty()
+    with st_autorefresh:
+        st.write("") # 空の要素
+        # インデックスを自動で進める
+        st.session_state.index = (st.session_state.index + 1) % len(df)
+        # JavaScript的なリフレッシュ（Streamlitの標準機能）
+        st.runtime.legacy_caching.clear_cache() # キャッシュクリア
+        st.rerun()
+
+# --- カード表示 ---
 english_text = str(df.iloc[st.session_state.index, 0])
 japanese_text = str(df.iloc[st.session_state.index, 1])
 
-# --- カード表示エリア ---
-if not st.session_state.show_answer:
-    # 表面（英語）
-    st.markdown(f'<div class="card-box">{english_text}</div>', unsafe_allow_html=True)
-else:
-    # 裏面（日本語）
-    st.markdown(f'<div class="card-box" style="color: #d32f2f;">{japanese_text}</div>', unsafe_allow_html=True)
+# カードのデザイン
+st.markdown(f"""
+    <div style="background-color: #f0f2f6; padding: 40px; border-radius: 10px; border-left: 10px solid #005088; margin-bottom: 20px;">
+        <h2 style="color: #333;">{english_text}</h2>
+        <hr>
+        <h3 style="color: #666;">{japanese_text}</h3>
+    </div>
+    """, unsafe_allow_html=True)
+
+# --- 音声の自動再生 ---
+# カードが表示されるたびに音声を生成して流す
+tts = gTTS(text=english_text, lang='en')
+audio_fp = io.BytesIO()
+tts.write_to_fp(audio_fp)
+st.audio(audio_fp, format='audio/mp3', autoplay=True)
 
 # --- 操作ボタン ---
-col1, col2, col3 = st.columns(3)
-
+col1, col2 = st.columns(2)
 with col1:
-    if st.button("⬅️ 前へ"):
+    if st.button("⬅️ 前のカードへ"):
         st.session_state.index = (st.session_state.index - 1) % len(df)
-        st.session_state.show_answer = False
         st.rerun()
 
 with col2:
-    if st.button("🔍 答えを見る"):
-        st.session_state.show_answer = not st.session_state.show_answer
-        st.rerun()
-
-with col3:
-    if st.button("次へ ➡️"):
+    if st.button("次のカードへ ➡️"):
         st.session_state.index = (st.session_state.index + 1) % len(df)
-        st.session_state.show_answer = False
         st.rerun()
 
 st.divider()
 
-# --- オートモード ---
-st.subheader("⚙️ オート再生モード")
-auto_speed = st.slider("切り替え速度（秒）", 1, 10, 3)
-
-if st.button("▶️ オート再生を開始（1周します）"):
-    for i in range(st.session_state.index, len(df)):
-        st.session_state.index = i
-        
-        # 1. 英語を表示
-        st.session_state.show_answer = False
-        st.rerun() # ここで画面更新
-        
-        # 2. 音声を再生（少し待機）
-        tts = gTTS(text=str(df.iloc[i, 0]), lang='en')
-        audio_fp = io.BytesIO()
-        tts.write_to_fp(audio_fp)
-        st.audio(audio_fp, format='audio/mp3', autoplay=True)
-        
-        time.sleep(auto_speed)
-        
-        # 3. 日本語を表示
-        st.session_state.show_answer = True
+# --- オート再生スイッチ ---
+if not st.session_state.auto_play:
+    if st.button("▶️ オート再生を開始する"):
+        st.session_state.auto_play = True
         st.rerun()
-        
-        time.sleep(2) # 和訳を見せる時間
+else:
+    if st.button("⏹️ オート再生を停止する"):
+        st.session_state.auto_play = False
+        st.rerun()
+
+st.caption(f"Card {st.session_state.index + 1} / {len(df)}")
