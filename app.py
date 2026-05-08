@@ -23,10 +23,21 @@ if 'index' not in st.session_state:
 if 'mode' not in st.session_state:
     st.session_state.mode = "手動"
 
+# --- 音声再生用関数 ---
+def play_audio(text):
+    if text:
+        tts = gTTS(text=text, lang='en')
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        fp.seek(0)
+        b64 = base64.b64encode(fp.read()).decode()
+        audio_html = f'<audio autoplay="true" src="data:audio/mp3;base64,{b64}"></audio>'
+        st.components.v1.html(audio_html, height=0)
+
 # --- タイトルの表示 ---
 st.title("🔊 CROWN音読ツール")
 
-# --- 学習モード選択（大きなボタン） ---
+# --- モード選択ボタン ---
 st.subheader("学習モードを選択")
 col_m1, col_m2 = st.columns(2)
 with col_m1:
@@ -40,19 +51,15 @@ with col_m2:
 
 st.divider()
 
-# --- 音声再生用関数（HTML埋め込み方式） ---
-def play_audio_html(text):
-    tts = gTTS(text=text, lang='en')
-    fp = io.BytesIO()
-    tts.write_to_fp(fp)
-    fp.seek(0)
-    b64 = base64.b64encode(fp.read()).decode()
-    md = f"""
-        <audio autoplay="true">
-        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-        </audio>
-        """
-    st.components.v1.html(md, height=0)
+# --- カード操作ボタン（「先頭に戻る」を特等席に配置） ---
+col_nav1, col_nav2 = st.columns([1, 3])
+with col_nav1:
+    # どのモードでも使えるリセットボタン
+    if st.button("⏮️ 先頭に戻る", use_container_width=True):
+        st.session_state.index = 0
+        st.rerun()
+with col_nav2:
+    st.caption(f"現在の位置: {st.session_state.index + 1} / {len(df)} 枚目")
 
 # --- 現在のカードデータ取得 ---
 english_text = str(df.iloc[st.session_state.index, 0])
@@ -66,12 +73,14 @@ st.markdown(f"""
     </div>
     """, unsafe_allow_html=True)
 
-# --- 実行ロジック ---
+# --- モード別実行ロジック ---
 
 if st.session_state.mode == "手動":
-    # 手動モード
-    play_audio_html(english_text)
+    # 再生ボタン
+    if st.button("▶️ 英語を再生", use_container_width=True):
+        play_audio(english_text)
     
+    # 前後移動
     col1, col2 = st.columns(2)
     with col1:
         if st.button("⬅️ 前へ", use_container_width=True):
@@ -83,17 +92,15 @@ if st.session_state.mode == "手動":
             st.rerun()
 
 else:
-    # オートモード
-    st.info(f"🤖 オート再生中... ({st.session_state.index + 1} / {len(df)})")
-    play_audio_html(english_text)
+    # --- オートモード ---
+    st.info("🤖 オート再生中...")
+    play_audio(english_text)
     
-    # 停止ボタンを大きく配置
     if st.button("⏹️ オートを停止して手動に戻る", use_container_width=True, type="primary"):
         st.session_state.mode = "手動"
         st.rerun()
     
-    # 再生速度の設定
-    wait_time = st.slider("次のカードまでの間隔（秒）", 3, 12, 6)
+    wait_time = st.slider("間隔（秒）", 3, 12, 6)
     
     # JavaScriptによる自動遷移
     st.components.v1.html(
@@ -106,8 +113,7 @@ else:
         """,
         height=0
     )
-    # 描画の裏側でインデックスを次に進めておく
+    # インデックスを次に進める（自動でループする設定）
     st.session_state.index = (st.session_state.index + 1) % len(df)
 
 st.divider()
-st.caption(f"Progress: {st.session_state.index + 1} / {len(df)}")
