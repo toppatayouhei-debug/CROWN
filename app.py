@@ -7,17 +7,15 @@ import json
 
 st.set_page_config(page_title="CROWN Study Hub", layout="centered")
 
-# --- 1. データの読み込み（2つのファイルを完全に独立して扱う） ---
+# --- 1. データの読み込み（以前の構成を完全維持） ---
 @st.cache_data
 def load_all_data():
-    # 本文（data.csv）: 以前の形式をそのまま維持
     try:
         df_text = pd.read_csv("data.csv").fillna("")
         text_list = df_text.values.tolist()
     except:
         text_list = [["Error", "data.csvが見つかりません"]]
 
-    # 単語（crowntango.csv）: 4列（English, Japanese, Example, Translation）
     try:
         df_tango = pd.read_csv("crowntango.csv").fillna("")
         while len(df_tango.columns) < 4:
@@ -30,7 +28,7 @@ def load_all_data():
 
 text_raw, tango_raw = load_all_data()
 
-# --- 2. 音声パック（以前のiPad安定版ロジックを継承） ---
+# --- 2. 音声パック（iPad安定版ロジックを完全継承） ---
 @st.cache_data
 def prepare_assets(raw_data, is_tango=False):
     prepared = []
@@ -47,10 +45,9 @@ def prepare_assets(raw_data, is_tango=False):
             "jp": str(item[1]),
             "audio": f"data:audio/mp3;base64,{b64}"
         }
-        # 単語カードの時だけ4列対応の追加データを付与
         if is_tango:
-            entry["ex"] = str(item[2])   # Example
-            entry["ext"] = str(item[3])  # Translation
+            entry["ex"] = str(item[2])
+            entry["ext"] = str(item[3])
         prepared.append(entry)
     return prepared
 
@@ -60,7 +57,7 @@ with st.spinner("教材を読み込み中..."):
 
 st.title("🎓 CROWN Study Hub")
 
-# --- 3. 画面表示（本文音読の挙動を絶対に変えない構成） ---
+# --- 3. 画面表示（本文音読の挙動を維持しつつ、テスト機能を追加） ---
 st.components.v1.html(f"""
     <div id="study-app" style="font-family: -apple-system, sans-serif; color: #333;">
         
@@ -74,14 +71,18 @@ st.components.v1.html(f"""
             <button id="btn-auto" style="flex: 1; padding: 12px; border-radius: 10px; border: none; background: #eee; color: #333; font-weight: bold;">🤖 オート</button>
         </div>
 
-        <div id="card" style="background: #f8f9fa; padding: 35px 20px; border-radius: 25px; border-left: 12px solid #005088; text-align: center; min-height: 250px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 6px 15px rgba(0,0,0,0.1);">
+        <div id="card" style="background: #f8f9fa; padding: 35px 20px; border-radius: 25px; border-left: 12px solid #005088; text-align: center; min-height: 280px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 6px 15px rgba(0,0,0,0.1);">
             <div id="eng" style="font-size: 28px; font-weight: 800; margin-bottom: 10px;"></div>
-            <div id="jp" style="font-size: 18px; color: #666; font-weight: bold;"></div>
             
-            <div id="tango-extra" style="display: none; border-top: 1px solid #ddd; margin-top: 15px; padding-top: 15px;">
-                <div id="ex" style="font-size: 16px; color: #005088; font-weight: 500; font-style: italic; margin-bottom: 5px;"></div>
-                <div id="ext" style="font-size: 14px; color: #6c757d;"></div>
+            <div id="jp-container">
+                <div id="jp" style="font-size: 18px; color: #666; font-weight: bold;"></div>
+                <div id="tango-extra" style="display: none; border-top: 1px solid #ddd; margin-top: 15px; padding-top: 15px;">
+                    <div id="ex" style="font-size: 16px; color: #005088; font-weight: 500; font-style: italic; margin-bottom: 5px;"></div>
+                    <div id="ext" style="font-size: 14px; color: #6c757d;"></div>
+                </div>
             </div>
+
+            <button id="btn-show" style="display: none; margin: 20px auto 0; padding: 10px 20px; border-radius: 20px; border: 2px solid #005088; background: white; color: #005088; font-weight: bold; cursor: pointer;">👀 答えを見る</button>
         </div>
 
         <div id="nav-controls" style="margin-top: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
@@ -107,6 +108,7 @@ st.components.v1.html(f"""
         let timer = null;
         let currentAudio = new Audio();
         let currentMode = 'text';
+        let isRevealed = false; // 答えが表示されているか
 
         function updateCard(shouldPlay = true) {{
             const item = currentDataSet[index];
@@ -114,20 +116,44 @@ st.components.v1.html(f"""
             document.getElementById('jp').innerText = item.jp;
             
             const extra = document.getElementById('tango-extra');
-            // 本文モードの時は余計なものを一切表示しない（以前のまま）
-            if (currentMode === 'tango' && item.ex) {{
-                extra.style.display = "block";
-                document.getElementById('ex').innerText = item.ex;
+            const showBtn = document.getElementById('btn-show');
+            const jpContainer = document.getElementById('jp-container');
+
+            if (currentMode === 'tango') {{
+                document.getElementById('jp').style.color = "#d63384";
+                document.getElementById('ex').innerText = item.ex || "";
                 document.getElementById('ext').innerText = item.ext || "";
-                document.getElementById('jp').style.color = "#d63384"; // 単語は目立たせる
+                
+                // オートモードなら最初から表示、手動なら隠す
+                if (isAuto) {{
+                    jpContainer.style.display = "block";
+                    extra.style.display = "block";
+                    showBtn.style.display = "none";
+                }} else {{
+                    jpContainer.style.display = "none";
+                    extra.style.display = "none";
+                    showBtn.style.display = "block";
+                    isRevealed = false;
+                }}
             }} else {{
+                // 本文音読モード（以前の挙動を完全維持）
+                document.getElementById('jp').style.color = "#666";
+                jpContainer.style.display = "block";
                 extra.style.display = "none";
-                document.getElementById('jp').style.color = "#666"; // 本文は以前の落ち着いた色
+                showBtn.style.display = "none";
             }}
 
             document.getElementById('status').innerText = (index + 1) + " / " + currentDataSet.length;
             if (shouldPlay) playAudio(item.audio);
         }}
+
+        // 答えを表示する処理
+        document.getElementById('btn-show').onclick = () => {{
+            document.getElementById('jp-container').style.display = "block";
+            document.getElementById('tango-extra').style.display = "block";
+            document.getElementById('btn-show').style.display = "none";
+            isRevealed = true;
+        }};
 
         function playAudio(src) {{
             if (timer) clearTimeout(timer);
@@ -136,7 +162,6 @@ st.components.v1.html(f"""
             currentAudio.play().then(() => {{
                 currentAudio.onended = () => {{
                     if (isAuto) {{
-                        // 本文音読の2.2秒待機を絶対維持
                         const delay = currentMode === 'text' ? 2200 : 3200;
                         timer = setTimeout(() => {{
                             if (!isAuto) return;
@@ -145,10 +170,9 @@ st.components.v1.html(f"""
                         }}, delay);
                     }}
                 }};
-            }}).catch(e => console.log("Click to play"));
+            }}).catch(e => console.log("Blocked"));
         }}
 
-        // モード切替（データを入れ替えるだけでロジックは変えない）
         document.getElementById('mode-text').onclick = () => {{
             currentMode = 'text'; currentDataSet = textData; index = 0; isAuto = false;
             updateUI(); updateCard(false);
@@ -161,7 +185,7 @@ st.components.v1.html(f"""
         document.getElementById('btn-next').onclick = () => {{ isAuto = false; index = (index + 1) % currentDataSet.length; updateCard(); updateUI(); }};
         document.getElementById('btn-prev').onclick = () => {{ isAuto = false; index = (index - 1 + currentDataSet.length) % currentDataSet.length; updateCard(); updateUI(); }};
         document.getElementById('btn-auto').onclick = () => {{ isAuto = true; updateUI(); updateCard(); }};
-        document.getElementById('btn-manual').onclick = () => {{ isAuto = false; updateUI(); }};
+        document.getElementById('btn-manual').onclick = () => {{ isAuto = false; updateUI(); updateCard(false); }};
         document.getElementById('btn-stop').onclick = () => {{ isAuto = false; currentAudio.pause(); updateUI(); }};
 
         function updateUI() {{
