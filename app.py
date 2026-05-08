@@ -19,7 +19,7 @@ st.markdown("""
         color: white;
     }
     </style>
-    """, unsafe_allow_stdio=True)
+    """, unsafe_allow_html=True)
 
 st.title("🔊 CROWN読み上げアプリ")
 st.write("スプレッドシートを更新すると、自動で最新の英文リストが表示されます。")
