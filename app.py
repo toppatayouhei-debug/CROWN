@@ -7,7 +7,7 @@ import json
 
 st.set_page_config(page_title="CROWN Buddy", layout="centered")
 
-# --- 1. データの読み込み（ロジック完全維持） ---
+# --- 1. データの読み込み（ロジック維持） ---
 @st.cache_data
 def load_all_data():
     try:
@@ -28,7 +28,7 @@ def load_all_data():
 
 text_raw, tango_raw = load_all_data()
 
-# --- 2. 音声パック（ロジック完全維持） ---
+# --- 2. 音声パック（ロジック維持） ---
 @st.cache_data
 def prepare_assets(raw_data, is_tango=False):
     prepared = []
@@ -51,30 +51,15 @@ def prepare_assets(raw_data, is_tango=False):
         prepared.append(entry)
     return prepared
 
-with st.spinner("✨ Buddyが教材を準備中..."):
+with st.spinner("✨ Buddyが準備中..."):
     text_json = json.dumps(prepare_assets(text_raw, False))
     tango_json = json.dumps(prepare_assets(tango_raw, True))
 
-# --- タイトル表示（余計なdivタグを徹底排除） ---
-robot_svg = """
-<svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 10px;">
-<rect x="2" y="6" width="20" height="15" rx="4" fill="#4a90e2"/>
-<circle cx="7.5" cy="11.5" r="1.5" fill="white"/>
-<circle cx="16.5" cy="11.5" r="1.5" fill="white"/>
-<rect x="9" y="16" width="6" height="2" rx="1" fill="white"/>
-<path d="M12 2V6" stroke="#4a90e2" stroke-width="2" stroke-linecap="round"/>
-<circle cx="12" cy="2" r="1.5" fill="#ff6b6b"/>
-</svg>
-"""
+# --- シンプルなタイトル（ここを変更しました） ---
+# 記号の 🤖 を使い、最も標準的な書き方にしました
+st.markdown("<h1 style='text-align: center; color: #4a90e2;'>🤖 CROWN Buddy</h1>", unsafe_allow_html=True)
 
-st.markdown(f"""
-    <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
-        {robot_svg}
-        <span style="color: #4a90e2; font-family: 'Comic Sans MS', cursive; font-size: 32px; font-weight: bold;">CROWN Buddy</span>
-    </div>
-""", unsafe_allow_html=True)
-
-# --- 3. メインUI（ここからHTML/JS） ---
+# --- 3. メインUI ---
 st.components.v1.html(f"""
     <style>
         @keyframes glow {{
@@ -87,7 +72,7 @@ st.components.v1.html(f"""
         }}
     </style>
 
-    <div id="study-app" style="font-family: 'Hiragino Maru Gothic ProN', 'Rounded Mplus 1c', sans-serif; color: #444; max-width: 550px; margin: auto;">
+    <div id="study-app" style="font-family: sans-serif; color: #444; max-width: 550px; margin: auto;">
         
         <div style="display: flex; background: #e0e6ed; padding: 6px; border-radius: 20px; margin-bottom: 20px;">
             <button id="mode-text" style="flex: 1; padding: 12px; border-radius: 16px; border: none; background: #4a90e2; color: white; font-weight: bold; cursor: pointer;">📖 本文音読</button>
